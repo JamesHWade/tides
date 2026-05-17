@@ -8,9 +8,15 @@
 
 import assert from "node:assert/strict";
 
-const { aggregatePeriods, emojiFor, scoreStrandDay, sunTimes } = await import(
-  "../src/utils/index"
-);
+const {
+  aggregatePeriods,
+  bestDailyRecommendation,
+  emojiFor,
+  formatClock,
+  lowTidePlayWindow,
+  scoreStrandDay,
+  sunTimes,
+} = await import("../src/utils/index");
 const { buildDayPlans, localEventsFor } = await import("../src/data/tides");
 
 // --- 1. weather aggregator ----------------------------------------------------
@@ -132,5 +138,89 @@ assert.ok(
   "low near sunrise should trigger glare/twilight reason",
 );
 console.log("✓ strand scoring");
+
+// --- 4. daylight-aware play windows -------------------------------------------
+// Regression: trip data has a low tide around 1:24 AM on May 17, 2026 (well
+// before the ~6:15 AM sunrise). Without a daylight filter the app used to
+// recommend a "Best low-tide play" window of 11:54 PM – 2:54 AM. That is the
+// nonsense this commit aims to prevent.
+const may17Sun = sunTimes("2026-05-17");
+const nightLow = { time: "01:24", displayTime: "1:24 AM", type: "Low", heightFt: -0.3 };
+const dayLow = { time: "13:51", displayTime: "1:51 PM", type: "Low", heightFt: -0.5 };
+const may17Stub = { date: "2026-05-17", label: "Sunday, May 17", tides: [nightLow, dayLow] };
+
+// 1 AM low → no window at all when daylight is supplied.
+const nightWindow = lowTidePlayWindow(may17Stub, nightLow, 90, may17Sun);
+assert.equal(nightWindow, null, "nighttime low should not produce a play window");
+
+// 1:51 PM low → unchanged window (fully inside daylight).
+const dayWindow = lowTidePlayWindow(may17Stub, dayLow, 90, may17Sun);
+assert.ok(dayWindow, "daytime low should produce a window");
+assert.equal(formatClock(dayWindow.start), "12:21 PM");
+assert.equal(formatClock(dayWindow.end), "3:21 PM");
+
+// Backward compatibility: no daylight arg → window is returned unclipped.
+const legacyWindow = lowTidePlayWindow(may17Stub, nightLow, 90);
+assert.ok(legacyWindow, "no-daylight call should still return a window");
+
+// Sunrise-straddling low → window clipped to start at sunrise.
+const sunriseLow = { time: "06:30", displayTime: "6:30 AM", type: "Low", heightFt: 0.2 };
+const sunriseStub = { date: "2026-05-17", label: "Sunday, May 17", tides: [sunriseLow] };
+const clipped = lowTidePlayWindow(sunriseStub, sunriseLow, 90, may17Sun);
+assert.ok(clipped, "sunrise-overlapping low should produce a (clipped) window");
+assert.equal(
+  clipped.start.getTime(),
+  may17Sun.sunrise.getTime(),
+  "clipped window must start at sunrise",
+);
+
+// Sunset-straddling low → window clipped to end at sunset. May 17 sunset is
+// around 8:15 PM, so a 7:30 PM low's ±90 min window (6:00 – 9:00 PM) must
+// have its tail trimmed to sunset.
+const sunsetLow = { time: "19:30", displayTime: "7:30 PM", type: "Low", heightFt: 0.3 };
+const sunsetStub = { date: "2026-05-17", label: "Sunday, May 17", tides: [sunsetLow] };
+const sunsetClipped = lowTidePlayWindow(sunsetStub, sunsetLow, 90, may17Sun);
+assert.ok(sunsetClipped, "sunset-overlapping low should produce a (clipped) window");
+assert.equal(
+  sunsetClipped.end.getTime(),
+  may17Sun.sunset.getTime(),
+  "clipped window must end at sunset",
+);
+assert.ok(
+  sunsetClipped.start.getTime() < may17Sun.sunset.getTime(),
+  "clipped window start must remain before sunset",
+);
+
+// Low entirely after sunset → no window at all.
+const afterSunsetLow = { time: "22:00", displayTime: "10:00 PM", type: "Low", heightFt: 0.4 };
+const afterSunsetStub = { date: "2026-05-17", label: "Sunday, May 17", tides: [afterSunsetLow] };
+const afterSunsetWindow = lowTidePlayWindow(afterSunsetStub, afterSunsetLow, 90, may17Sun);
+assert.equal(afterSunsetWindow, null, "post-sunset low should not produce a play window");
+
+// Recommendation copy must not promise "morning beach play" for an all-night low.
+const onlyNightDay = { date: "2026-05-17", label: "Sunday, May 17", tides: [nightLow] };
+const recNight = bestDailyRecommendation(
+  onlyNightDay,
+  { napStart: "13:00", napEnd: "15:00" },
+  may17Sun,
+);
+assert.ok(
+  /outside daylight/i.test(recNight),
+  `nighttime-only low should produce an outside-daylight rec, got: ${recNight}`,
+);
+
+// Daytime low + nap clear of it → cheerful afternoon rec (May 17's 1:51 PM
+// low gives a 12:21 PM – 3:21 PM window; with a 9:00 AM nap there's no
+// conflict so we should land on the afternoon copy, not the fallback).
+const recDay = bestDailyRecommendation(
+  may17Stub,
+  { napStart: "09:00", napEnd: "10:30" },
+  may17Sun,
+);
+assert.ok(
+  /afternoon/i.test(recDay) && !/overlap nap/i.test(recDay),
+  `daytime low with clear nap should produce an afternoon rec, got: ${recDay}`,
+);
+console.log("✓ daylight-aware recommendations");
 
 console.log("\nAll smoke tests passed.");
