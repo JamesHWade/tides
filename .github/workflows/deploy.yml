@@ -48,6 +48,26 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Check if GitHub Pages is enabled
+        id: pages
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.repos.getPages({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              core.setOutput("enabled", "true");
+            } catch (error) {
+              if (error.status === 404) {
+                core.warning("GitHub Pages is not enabled for this repository; skipping deployment.");
+                core.setOutput("enabled", "false");
+                return;
+              }
+              throw error;
+            }
       - name: Deploy
+        if: steps.pages.outputs.enabled == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
