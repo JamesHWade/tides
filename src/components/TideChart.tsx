@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import type { DayPlan } from "../data/tides";
 import {
   type NapSettings,
-  type TidePoint,
   flattenTides,
+  formatClock,
   interpolateHeight,
   napInterval,
   timeOn,
@@ -23,6 +23,8 @@ const STEP_MIN = 10;
 const PAD_TOP = 0.08; // fraction of height
 const PAD_BOTTOM = 0.08;
 
+type Sample = { time: Date; heightFt: number };
+
 export function TideChart({ day, allDays, nap, now }: Props) {
   // Internal SVG coordinate space (kept simple; aspect ratio handled via CSS).
   const W = 1000;
@@ -33,11 +35,11 @@ export function TideChart({ day, allDays, nap, now }: Props) {
     const dayStart = timeOn(day.date, "00:00");
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-    const points: TidePoint[] = [];
+    const points: Sample[] = [];
     for (let t = dayStart.getTime(); t <= dayEnd.getTime(); t += STEP_MIN * 60 * 1000) {
       const at = new Date(t);
       const h = interpolateHeight(timeline, at);
-      if (h != null) points.push({ time: at, heightFt: h, type: "High" });
+      if (h != null) points.push({ time: at, heightFt: h });
     }
 
     let minH = Infinity;
@@ -75,8 +77,8 @@ export function TideChart({ day, allDays, nap, now }: Props) {
   const napWidthPct = xPct(nap_.end) - xPct(nap_.start);
 
   const sun = sunTimes(day.date);
-  const dayLeftPct = (sun.sunriseHours / 24) * 100;
-  const dayRightPct = (sun.sunsetHours / 24) * 100;
+  const dayLeftPct = xPct(sun.sunrise);
+  const dayRightPct = xPct(sun.sunset);
 
   const nowInDay =
     now != null && now.getTime() >= dayStart.getTime() && now.getTime() <= dayEnd.getTime();
@@ -226,7 +228,7 @@ export function TideChart({ day, allDays, nap, now }: Props) {
       <figcaption className="visually-hidden">
         {day.tides.map((t) => `${t.type} ${t.displayTime} ${t.heightFt.toFixed(1)} ft`).join("; ")}
         {". "}
-        Sunrise {sun.sunriseLabel}, sunset {sun.sunsetLabel}.
+        Sunrise {formatClock(sun.sunrise)}, sunset {formatClock(sun.sunset)}.
       </figcaption>
     </figure>
   );

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { DATA_GENERATED_AT, DATA_VERIFIED, STATION, tideDays, TRIP_RANGE } from "./data/tides";
-import { DEFAULT_NAP, type NapSettings, timeOn } from "./utils/tideUtils";
+import {
+  DEFAULT_NAP,
+  type NapSettings,
+  dateISOOf,
+  nowInStationTZ,
+} from "./utils/tideUtils";
 import { Header } from "./components/Header";
 import { NapSettingsCard } from "./components/NapSettings";
 import { DayCard } from "./components/DayCard";
@@ -25,28 +30,29 @@ function loadNap(): NapSettings {
   }
 }
 
+/** `now` here is an Eastern wall-clock-UTC Date (see tideUtils.ts). */
 function todayInTripISO(now: Date): string | null {
-  const start = timeOn(TRIP_RANGE.startISO, "00:00");
-  const end = new Date(timeOn(TRIP_RANGE.endISO, "00:00").getTime() + 86400000);
-  if (now.getTime() < start.getTime() || now.getTime() > end.getTime()) return null;
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const iso = dateISOOf(now);
+  if (iso < TRIP_RANGE.startISO || iso > TRIP_RANGE.endISO) return null;
+  return iso;
 }
 
 function scrollToDay(dateISO: string) {
   const el = document.getElementById(`day-${dateISO}`);
-  if (el) {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    el.classList.add("day-card--flash");
-    window.setTimeout(() => el.classList.remove("day-card--flash"), 1200);
-  }
+  if (!el) return;
+  const reduced =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  el.classList.add("day-card--flash");
+  window.setTimeout(() => el.classList.remove("day-card--flash"), 1200);
 }
 
 export default function App() {
   const [nap, setNap] = useState<NapSettings>(() => loadNap());
-  const [now, setNow] = useState<Date>(() => new Date());
+  // `now` is in the station's local timezone (see tideUtils.ts), so it shares
+  // the same coordinate system as tide/sun times.
+  const [now, setNow] = useState<Date>(() => nowInStationTZ());
 
   useEffect(() => {
     try {
@@ -57,7 +63,7 @@ export default function App() {
   }, [nap]);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    const id = window.setInterval(() => setNow(nowInStationTZ()), 60_000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -68,7 +74,7 @@ export default function App() {
       <Header />
 
       <main className="container">
-        <TripStatus days={tideDays} />
+        <TripStatus days={tideDays} now={now} />
 
         <section className="card overview-card" aria-labelledby="overview-heading">
           <div className="card-head">
