@@ -73,6 +73,22 @@ export function emojiFor(label: string | undefined | null): string {
   return "🌥️";
 }
 
+/**
+ * Merge NWS period objects (alternating day/night) into a single per-date
+ * record. Field-by-field rule, kept here so the asymmetry is obvious:
+ *
+ *   - `highF`                  ← daytime period only
+ *   - `lowF`                   ← nighttime period only
+ *   - `shortForecast` / `emoji` ← daytime period; falls back to nighttime
+ *                                  if no daytime period was seen for the date
+ *                                  (true at the very start/end of the feed)
+ *   - `detailedForecast` / `icon` ← daytime period only
+ *   - `windMphMax` / `windFromDir` ← daytime period; nighttime ignored
+ *   - `precipChancePct`        ← daytime period if present, else nighttime
+ *
+ * Order of arrival doesn't matter — periods are keyed by date and merged
+ * idempotently.
+ */
 export function aggregatePeriods(periods: NWSPeriod[]): Map<string, DayWeather> {
   const out = new Map<string, DayWeather>();
   for (const p of periods) {

@@ -51,6 +51,11 @@ function scrollToDay(dateISO: string) {
   window.setTimeout(() => el.classList.remove("day-card--flash"), 1200);
 }
 
+function noonUtc(dateISO: string): Date {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 12));
+}
+
 function rangeLabel(startISO: string, endISO: string): string {
   const fmt = new Intl.DateTimeFormat("en-US", {
     month: "long",
@@ -58,8 +63,8 @@ function rangeLabel(startISO: string, endISO: string): string {
     timeZone: "UTC",
   });
   const yearFmt = new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: "UTC" });
-  const s = new Date(startISO + "T12:00:00Z");
-  const e = new Date(endISO + "T12:00:00Z");
+  const s = noonUtc(startISO);
+  const e = noonUtc(endISO);
   if (startISO === endISO) return `${fmt.format(s)}, ${yearFmt.format(s)}`;
   if (s.getUTCFullYear() === e.getUTCFullYear()) {
     return `${fmt.format(s)} – ${fmt.format(e)}, ${yearFmt.format(s)}`;
@@ -208,6 +213,12 @@ export default function App() {
                   {new Date(weather.snapshotAt).toLocaleString()}
                 </time>
               </>
+            )}
+            {weather.status === "stale" && (
+              <> · ⚠ live refresh failed, showing cached forecast</>
+            )}
+            {weather.status === "error" && (
+              <> · ⚠ forecast unavailable</>
             )}
             .
           </p>

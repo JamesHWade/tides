@@ -26,8 +26,11 @@ export function StrandScoreCard({ score }: Props) {
         {bestWindow && <span className="strand-score__window">{bestWindow}</span>}
       </div>
       <ul className="strand-score__reasons">
-        {score.reasons.map((r) => (
-          <li key={r.label} className={`strand-score__reason strand-score__reason--${r.tone}`}>
+        {score.reasons.map((r, i) => (
+          <li
+            key={`${r.tone}-${i}`}
+            className={`strand-score__reason strand-score__reason--${r.tone}`}
+          >
             <span aria-hidden="true" className="strand-score__bullet">
               {r.tone === "plus" ? "+" : r.tone === "minus" ? "−" : "·"}
             </span>

@@ -20,17 +20,18 @@ function isValidISO(s: string): boolean {
 function clampRange(range: DateRange): DateRange {
   const fallback = { startISO: TRIP_RANGE.startISO, endISO: TRIP_RANGE.endISO };
   if (!isValidISO(range.startISO) || !isValidISO(range.endISO)) return fallback;
-  if (range.endISO < range.startISO) {
-    return { startISO: range.startISO, endISO: range.startISO };
-  }
-  const start = new Date(range.startISO + "T00:00:00Z");
-  const end = new Date(range.endISO + "T00:00:00Z");
+  // Collapse reversed ranges to a single day, then always re-apply the
+  // MAX_DAYS cap. Don't short-circuit out of the cap on the reversed branch.
+  let { startISO, endISO } = range;
+  if (endISO < startISO) endISO = startISO;
+  const start = new Date(startISO + "T00:00:00Z");
+  const end = new Date(endISO + "T00:00:00Z");
   const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
   if (days > MAX_DAYS - 1) {
     const clamped = new Date(start.getTime() + (MAX_DAYS - 1) * 86_400_000);
-    return { startISO: range.startISO, endISO: clamped.toISOString().slice(0, 10) };
+    endISO = clamped.toISOString().slice(0, 10);
   }
-  return range;
+  return { startISO, endISO };
 }
 
 function load(): DateRange {

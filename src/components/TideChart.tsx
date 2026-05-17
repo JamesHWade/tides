@@ -22,11 +22,30 @@ const STEP_MIN = 10;
 
 type Sample = { time: Date; heightFt: number };
 
+// Chart geometry — must be kept in sync with Plot's margin/size config below
+// because the "now" overlay positions itself in the same pixel space.
+const MARGIN_LEFT = 36;
+const MARGIN_RIGHT = 14;
+const MARGIN_TOP = 26;
+const NARROW_BREAK = 480;
+
+function chartHeight(w: number) {
+  return w < NARROW_BREAK ? 200 : 240;
+}
+
+function marginBottom(w: number) {
+  return w < NARROW_BREAK ? 36 : 30;
+}
+
 export function TideChart({ day, allDays, nap, now }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
-  const { points, dayStart, dayEnd, minH, maxH, nowSample } = useMemo(() => {
+  // The Plot's data — intentionally does NOT depend on `now`. The "now"
+  // overlay is rendered as positioned divs over the chart so the Plot is
+  // only rebuilt when its underlying data changes, not on the per-minute
+  // tick from App.
+  const { points, dayStart, dayEnd, minH, maxH, timeline } = useMemo(() => {
     const timeline = flattenTides(allDays);
     const dayStart = timeOn(day.date, "00:00");
     const dayEnd = new Date(dayStart.getTime() + 86_400_000);
@@ -52,13 +71,8 @@ export function TideChart({ day, allDays, nap, now }: Props) {
     minH -= pad;
     maxH += pad;
 
-    const nowInDay =
-      now != null && now.getTime() >= dayStart.getTime() && now.getTime() <= dayEnd.getTime();
-    const nowH = nowInDay ? interpolateHeight(timeline, now!) : null;
-    const nowSample = nowInDay && nowH != null ? { time: now!, heightFt: nowH } : null;
-
-    return { points, dayStart, dayEnd, minH, maxH, nowSample };
-  }, [day.date, allDays, now]);
+    return { points, dayStart, dayEnd, minH, maxH, timeline };
+  }, [day.date, allDays]);
 
   const sun = useMemo(() => sunTimes(day.date), [day.date]);
   const napRange = useMemo(
@@ -70,8 +84,8 @@ export function TideChart({ day, allDays, nap, now }: Props) {
     const el = containerRef.current;
     if (!el) return;
     const w = width || el.clientWidth || 600;
-    const isNarrow = w < 480;
-    const height = isNarrow ? 200 : 240;
+    const isNarrow = w < NARROW_BREAK;
+    const height = chartHeight(w);
 
     const tideMarkers = day.tides.map((t) => ({
       time: timeOn(day.date, t.time),
@@ -93,10 +107,10 @@ export function TideChart({ day, allDays, nap, now }: Props) {
     const plot = Plot.plot({
       width: w,
       height,
-      marginTop: 26,
-      marginBottom: isNarrow ? 36 : 30,
-      marginLeft: 36,
-      marginRight: 14,
+      marginTop: MARGIN_TOP,
+      marginBottom: marginBottom(w),
+      marginLeft: MARGIN_LEFT,
+      marginRight: MARGIN_RIGHT,
       style: {
         background: "transparent",
         fontFamily:
@@ -202,33 +216,6 @@ export function TideChart({ day, allDays, nap, now }: Props) {
             paintOrder: "stroke",
           },
         ),
-        nowSample
-          ? Plot.ruleX([nowSample.time], {
-              stroke: "#ff7e6b",
-              strokeWidth: 2,
-            })
-          : null,
-        nowSample
-          ? Plot.dot([nowSample], {
-              x: "time",
-              y: "heightFt",
-              r: 6,
-              fill: "#ff7e6b",
-              stroke: "white",
-              strokeWidth: 2,
-            })
-          : null,
-        nowSample
-          ? Plot.text([nowSample], {
-              x: "time",
-              y: maxH,
-              text: () => "NOW",
-              dy: -8,
-              fontSize: 9,
-              fontWeight: 800,
-              fill: "#ff7e6b",
-            })
-          : null,
       ].filter(Boolean) as Plot.Markish[],
     });
 
@@ -236,7 +223,7 @@ export function TideChart({ day, allDays, nap, now }: Props) {
     return () => {
       plot.remove();
     };
-  }, [day, allDays, nap, now, points, dayStart, dayEnd, minH, maxH, nowSample, napRange, sun, width]);
+  }, [day, points, dayStart, dayEnd, minH, maxH, napRange, sun, width]);
 
   // Re-render on resize so axes/labels reflow on rotation.
   useEffect(() => {
@@ -258,9 +245,58 @@ export function TideChart({ day, allDays, nap, now }: Props) {
     };
   }, []);
 
+  // "Now" overlay positions, in pixels matching the Plot's coordinate system.
+  // Recomputing this each render is cheap; only the overlay re-renders on the
+  // per-minute tick, not the whole Plot.
+  const nowOverlay = useMemo(() => {
+    if (!now) return null;
+    if (now.getTime() < dayStart.getTime() || now.getTime() > dayEnd.getTime()) return null;
+    const w = width || 600;
+    const h = chartHeight(w);
+    const mBottom = marginBottom(w);
+    const innerW = w - MARGIN_LEFT - MARGIN_RIGHT;
+    const innerH = h - MARGIN_TOP - mBottom;
+    const span = dayEnd.getTime() - dayStart.getTime();
+    const x = MARGIN_LEFT + ((now.getTime() - dayStart.getTime()) / span) * innerW;
+    const nowH = interpolateHeight(timeline, now);
+    const yFor = (val: number) =>
+      MARGIN_TOP + (1 - (val - minH) / (maxH - minH)) * innerH;
+    const dotY = nowH != null ? yFor(nowH) : null;
+    return { x, dotY, lineTop: MARGIN_TOP, lineHeight: innerH, plotHeight: h };
+  }, [now, dayStart, dayEnd, minH, maxH, timeline, width]);
+
   return (
     <figure className="tide-chart" aria-label={`Tide curve for ${day.label}`}>
-      <div ref={containerRef} className="tide-chart__plot" />
+      <div className="tide-chart__plot-wrap">
+        <div ref={containerRef} className="tide-chart__plot" />
+        {nowOverlay && (
+          <>
+            <div
+              className="tide-chart__now-line"
+              style={{
+                left: `${nowOverlay.x}px`,
+                top: `${nowOverlay.lineTop}px`,
+                height: `${nowOverlay.lineHeight}px`,
+              }}
+              aria-hidden="true"
+            />
+            {nowOverlay.dotY != null && (
+              <div
+                className="tide-chart__now-dot"
+                style={{ left: `${nowOverlay.x}px`, top: `${nowOverlay.dotY}px` }}
+                aria-hidden="true"
+              />
+            )}
+            <div
+              className="tide-chart__now-badge"
+              style={{ left: `${nowOverlay.x}px`, top: `${nowOverlay.lineTop - 14}px` }}
+              aria-label="Now"
+            >
+              NOW
+            </div>
+          </>
+        )}
+      </div>
       <figcaption className="visually-hidden">
         {day.tides.map((t) => `${t.type} ${t.displayTime} ${t.heightFt.toFixed(1)} ft`).join("; ")}
         {". "}

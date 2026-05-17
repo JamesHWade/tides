@@ -1,17 +1,17 @@
-// Smoke test for the pure logic modules. Imports .ts source directly, so it
-// requires a TypeScript loader. Run via `npm run test:smoke` (uses tsx), or
-// `npx tsx scripts/smoke-test.mjs`. Plain `node scripts/smoke-test.mjs` will
-// fail with ERR_UNKNOWN_FILE_EXTENSION — that's expected.
+// Smoke test for the pure logic modules. Requires a TypeScript loader
+// (`tsx`); run via `npm run test:smoke`. Plain `node scripts/smoke-test.mjs`
+// will fail because tsx is what teaches Node to resolve `.ts` modules.
 //
-// Doesn't render React; just exercises the data transforms so we catch the
-// stuff TypeScript can't catch (e.g. nonsensical thresholds, NaN propagation).
+// Imports go through the utils barrel (`src/utils/index.ts`) and the tides
+// data module, so the script doesn't need to thumbprint `.ts` extensions —
+// any other runner that respects the project's `tsconfig` paths will work.
 
 import assert from "node:assert/strict";
 
-const { aggregatePeriods, emojiFor } = await import("../src/utils/runtimeWeather.ts");
-const { scoreStrandDay } = await import("../src/utils/strandScore.ts");
-const { sunTimes } = await import("../src/utils/sunTimes.ts");
-const { buildDayPlans, localEventsFor } = await import("../src/data/tides.ts");
+const { aggregatePeriods, emojiFor, scoreStrandDay, sunTimes } = await import(
+  "../src/utils/index"
+);
+const { buildDayPlans, localEventsFor } = await import("../src/data/tides");
 
 // --- 1. weather aggregator ----------------------------------------------------
 const periods = [

@@ -45,6 +45,11 @@ export function useTideDays(range: DateRange): TideDaysResult {
     () => dates.filter((iso) => !localEventsFor(iso) && !fetched.has(iso)),
     [dates, fetched],
   );
+  // Stable string key for the missing-dates set. Used as an effect dep so a
+  // re-fetch only happens when the *contents* of `missing` change, not when
+  // its array reference does — otherwise a partial NOAA response would keep
+  // shrinking-but-still-non-empty `missing` and we'd loop forever.
+  const missingKey = missing.join("|");
 
   useEffect(() => {
     if (missing.length === 0) {
@@ -62,9 +67,18 @@ export function useTideDays(range: DateRange): TideDaysResult {
       .then((map) => {
         if (ac.signal.aborted) return;
         setFetched((prev) => {
+          // Skip the state update if the response added nothing new — saves a
+          // render and (combined with `missingKey`) prevents a fetch loop on
+          // an empty/partial NOAA response.
+          let added = false;
           const next = new Map(prev);
-          for (const [k, v] of map) next.set(k, v);
-          return next;
+          for (const [k, v] of map) {
+            if (!prev.has(k)) {
+              next.set(k, v);
+              added = true;
+            }
+          }
+          return added ? next : prev;
         });
         setStatus("ready");
       })
@@ -74,7 +88,10 @@ export function useTideDays(range: DateRange): TideDaysResult {
         setError(err?.message ?? "Failed to load tides");
       });
     return () => ac.abort();
-  }, [range.startISO, range.endISO, missing]);
+    // `missing` itself is excluded from deps because it's derived from
+    // `missingKey`; reacting to the stable key is what stops the refetch loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.startISO, range.endISO, missingKey]);
 
   const sources = useMemo<Map<string, EventSource>>(() => {
     const out = new Map<string, EventSource>();

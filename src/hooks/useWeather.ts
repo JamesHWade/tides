@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WEATHER_DATA_GENERATED_AT } from "../data/weather";
-import { generatedWeather } from "../data/weather.generated";
+import { WEATHER_DATA_GENERATED_AT, seedWeatherSnapshot } from "../data/weather";
 import { fetchWeatherByDate, type DayWeather } from "../utils/runtimeWeather";
 
-export type WeatherStatus = "idle" | "loading" | "ready" | "error";
+/**
+ * Status semantics:
+ *   - "idle"    initial, before any fetch attempt.
+ *   - "loading" a fetch is in flight.
+ *   - "ready"   live fetch succeeded; `byDate` reflects fresh NWS data.
+ *   - "stale"   live fetch failed but a build-time snapshot is available, so
+ *               `byDate` is non-empty but possibly out of date.
+ *   - "error"   live fetch failed and there's no snapshot to fall back to.
+ */
+export type WeatherStatus = "idle" | "loading" | "ready" | "stale" | "error";
 
 export type WeatherMap = Map<string, DayWeather>;
 
@@ -27,7 +35,7 @@ const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
  * forecast.
  */
 export function useWeather(enabled = true): WeatherResult {
-  const [byDate, setByDate] = useState<WeatherMap>(seedFromSnapshot);
+  const [byDate, setByDate] = useState<WeatherMap>(seedWeatherSnapshot);
   const [status, setStatus] = useState<WeatherStatus>("idle");
   const [liveAt, setLiveAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +64,15 @@ export function useWeather(enabled = true): WeatherResult {
       })
       .catch((err) => {
         if (ac.signal.aborted) return;
-        setStatus(generatedWeather.length > 0 ? "ready" : "error");
+        // "stale" preserves the snapshot while still surfacing the failure so
+        // callers checking `status !== "ready"` see it.
+        setStatus((curr) =>
+          curr === "ready"
+            ? "stale"
+            : seedWeatherSnapshot().size > 0
+              ? "stale"
+              : "error",
+        );
         setError(err?.message ?? "Forecast unavailable");
       });
   }, []);
@@ -81,8 +97,4 @@ export function useWeather(enabled = true): WeatherResult {
   }, [enabled, fetchNow]);
 
   return { byDate, status, liveAt, snapshotAt: WEATHER_DATA_GENERATED_AT, error };
-}
-
-function seedFromSnapshot(): WeatherMap {
-  return new Map(generatedWeather.map((w) => [w.date, w]));
 }

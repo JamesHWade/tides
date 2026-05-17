@@ -28,15 +28,22 @@ const OFFSET_FORMAT = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
 });
 
-/** UTC offset in hours for the station on the given date (handles DST). */
-function easternOffsetHours(dateISO: string): number {
+/**
+ * UTC offset in hours for `STATION.timeZone` on the given date (handles DST).
+ *
+ * Returns 0 if Intl can't parse the offset (essentially never on a real
+ * browser engine, but better to render at UTC than silently force Eastern —
+ * the previous hard-coded `-5` fallback would have been wrong for any future
+ * non-Eastern station configuration).
+ */
+function stationOffsetHours(dateISO: string): number {
   const probe = new Date(dateISO + "T12:00:00Z");
   const part = OFFSET_FORMAT.formatToParts(probe).find(
     (p) => p.type === "timeZoneName",
   );
-  if (!part) return -5;
+  if (!part) return 0;
   const m = /GMT([+-]?\d+)(?::(\d+))?/.exec(part.value);
-  if (!m) return -5;
+  if (!m) return 0;
   const hours = Number(m[1]);
   const mins = m[2] ? Number(m[2]) / 60 : 0;
   return hours >= 0 ? hours + mins : hours - mins;
@@ -67,15 +74,15 @@ export function sunTimes(dateISO: string): { sunrise: Date; sunset: Date } {
   const utcRise = new Date((Jtransit - H / 360 - 2440587.5) * 86400000);
   const utcSet = new Date((Jtransit + H / 360 - 2440587.5) * 86400000);
 
-  const offset = easternOffsetHours(dateISO);
+  const offset = stationOffsetHours(dateISO);
 
   return {
-    sunrise: utcToEastern(utcRise, dateISO, offset),
-    sunset: utcToEastern(utcSet, dateISO, offset),
+    sunrise: utcToStationLocal(utcRise, dateISO, offset),
+    sunset: utcToStationLocal(utcSet, dateISO, offset),
   };
 }
 
-function utcToEastern(utc: Date, dateISO: string, offsetHours: number): Date {
+function utcToStationLocal(utc: Date, dateISO: string, offsetHours: number): Date {
   const totalMin = utc.getUTCHours() * 60 + utc.getUTCMinutes() + offsetHours * 60;
   const wrapped = ((totalMin % 1440) + 1440) % 1440;
   const hh = Math.floor(wrapped / 60);

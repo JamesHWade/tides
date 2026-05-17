@@ -40,9 +40,13 @@ export function DateRangePicker({ value, isTrip, onChange, onReset, statusLine }
 
   const jumpToToday = () => {
     const t = todayISO();
+    // Center today inside the current span. For an even-length span, today
+    // sits just left of center (e.g. 8-day range → today is day 4 of 8).
+    const back = Math.floor((span - 1) / 2);
+    const forward = Math.max(0, span - 1 - back);
     onChange({
-      startISO: t,
-      endISO: shiftISO(t, Math.max(0, span - 1)),
+      startISO: shiftISO(t, -back),
+      endISO: shiftISO(t, forward),
     });
   };
 
