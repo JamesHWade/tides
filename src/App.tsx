@@ -71,7 +71,14 @@ export default function App() {
   const [nap, setNap] = useState<NapSettings>(() => loadNap());
   const [now, setNow] = useState<Date>(() => nowInStationTZ());
   const { range, setRange, resetToTrip } = useDateRange();
-  const { days, status, error, snapshotCoverage } = useTideDays(range);
+  const {
+    days,
+    status,
+    error,
+    snapshotCoverage,
+    placeholderCoverage,
+    fetchedCoverage,
+  } = useTideDays(range);
   const weather = useWeather();
 
   useEffect(() => {
@@ -96,9 +103,19 @@ export default function App() {
   const statusLine: React.ReactNode = (() => {
     if (status === "loading") return "⏳ Fetching tides…";
     if (status === "error") return `⚠ ${error ?? "Tide fetch failed"}`;
-    if (snapshotCoverage === 1) return "✓ Snapshot covers this range";
-    if (snapshotCoverage > 0) return "✓ Mixed snapshot + live fetch";
-    return "✓ Live NOAA fetch";
+    if (placeholderCoverage === 1) {
+      return "⚠ Placeholder pattern only — run `npm run fetch-tides`";
+    }
+    if (snapshotCoverage === 1) return "✓ NOAA snapshot covers this range";
+    if (snapshotCoverage > 0 && fetchedCoverage > 0) {
+      return "✓ Snapshot + live NOAA fetch";
+    }
+    if (placeholderCoverage > 0 && fetchedCoverage > 0) {
+      return "✓ Placeholder + live NOAA fetch";
+    }
+    if (snapshotCoverage > 0) return "✓ NOAA snapshot (partial)";
+    if (fetchedCoverage > 0) return "✓ Live NOAA fetch";
+    return "—";
   })();
 
   return (

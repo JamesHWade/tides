@@ -117,10 +117,23 @@ const SNAPSHOT_BY_DATE: Map<string, TideEvent[]> = new Map(
     .map((d) => [d.date, d.tides] as const),
 );
 
-/** Best on-hand events for a date: NOAA snapshot, else placeholder, else undefined. */
+/** NOAA build-time snapshot, no fallback. */
+export function snapshotEventsFor(dateISO: string): TideEvent[] | undefined {
+  return SNAPSHOT_BY_DATE.get(dateISO);
+}
+
+/** Hand-coded placeholder for the default trip dates, no NOAA backing. */
+export function placeholderEventsFor(dateISO: string): TideEvent[] | undefined {
+  return PLACEHOLDER_BY_DATE[dateISO];
+}
+
+/** Best on-hand events for a date: snapshot, else placeholder, else undefined. */
 export function localEventsFor(dateISO: string): TideEvent[] | undefined {
   return SNAPSHOT_BY_DATE.get(dateISO) ?? PLACEHOLDER_BY_DATE[dateISO];
 }
+
+/** Where a date's events came from. */
+export type EventSource = "snapshot" | "placeholder" | "fetched" | "missing";
 
 export function labelForDate(dateISO: string): string {
   const [y, m, d] = dateISO.split("-").map(Number);

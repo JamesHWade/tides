@@ -1113,6 +1113,12 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.day-card__no-weather {
+  margin: 0;
+  font-size: 0.84rem;
+  font-style: italic;
+}
+
 /* ---------- Strand-feeding score (per day) ---------- */
 .strand-score {
   border-radius: 12px;

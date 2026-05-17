@@ -6,18 +6,16 @@ const RATING_CLASS: Record<StrandScore["rating"], string> = {
   favorable: "strand-score--favorable",
   marginal: "strand-score--marginal",
   unfavorable: "strand-score--unfavorable",
-  "off-season": "strand-score--unfavorable",
 };
 
 const RATING_EMOJI: Record<StrandScore["rating"], string> = {
   favorable: "🐬",
   marginal: "⚖️",
   unfavorable: "✕",
-  "off-season": "🪨",
 };
 
 export function StrandScoreCard({ score }: Props) {
-  const window = formatBestWindow(score.bestWindow);
+  const bestWindow = formatBestWindow(score.bestWindow);
   return (
     <div className={`strand-score ${RATING_CLASS[score.rating]}`}>
       <div className="strand-score__head">
@@ -25,7 +23,7 @@ export function StrandScoreCard({ score }: Props) {
           <span aria-hidden="true">{RATING_EMOJI[score.rating]}</span>{" "}
           Strand-feeding {ratingLabel(score.rating).toLowerCase()}
         </span>
-        {window && <span className="strand-score__window">{window}</span>}
+        {bestWindow && <span className="strand-score__window">{bestWindow}</span>}
       </div>
       <ul className="strand-score__reasons">
         {score.reasons.map((r) => (

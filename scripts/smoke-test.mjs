@@ -1,16 +1,12 @@
-// Smoke test for the pure logic modules. Run with `node scripts/smoke-test.mjs`.
+// Smoke test for the pure logic modules. Imports .ts source directly, so it
+// requires a TypeScript loader. Run via `npm run test:smoke` (uses tsx), or
+// `npx tsx scripts/smoke-test.mjs`. Plain `node scripts/smoke-test.mjs` will
+// fail with ERR_UNKNOWN_FILE_EXTENSION — that's expected.
+//
 // Doesn't render React; just exercises the data transforms so we catch the
 // stuff TypeScript can't catch (e.g. nonsensical thresholds, NaN propagation).
 
 import assert from "node:assert/strict";
-
-// Import compiled-ish .ts via vite's esbuild loader. We invoke through tsx if
-// available; otherwise the user can run via Node 22 + --experimental-strip-types.
-// Easiest: rely on the dynamic-import w/ .ts not being supported and fall back
-// to a manual port of the strand scorer for sanity. Here we go via the bundle.
-
-// Smoke test the runtime weather aggregator and strand scorer by re-implementing
-// only the boundary contract via the same input shapes.
 
 const { aggregatePeriods, emojiFor } = await import("../src/utils/runtimeWeather.ts");
 const { scoreStrandDay } = await import("../src/utils/strandScore.ts");
@@ -53,6 +49,18 @@ assert.equal(may17.precipChancePct, 20);
 assert.equal(may17.shortForecast, "Mostly Sunny");
 assert.equal(emojiFor("Thunderstorms Likely"), "⛈️");
 assert.equal(emojiFor("Sunny"), "☀️");
+// Regression: emojiFor must not throw when called with undefined/null/empty.
+assert.equal(emojiFor(undefined), "🌥️");
+assert.equal(emojiFor(null), "🌥️");
+assert.equal(emojiFor(""), "🌥️");
+// Periods with missing shortForecast must aggregate cleanly, not throw.
+const sparsePeriods = [
+  { startTime: "2026-05-17T06:00:00-04:00", isDaytime: true, temperature: 80, temperatureUnit: "F", windSpeed: null, windDirection: null },
+  { startTime: "2026-05-17T18:00:00-04:00", isDaytime: false, temperature: 60, temperatureUnit: "F", windSpeed: null, windDirection: null },
+];
+const sparse = aggregatePeriods(sparsePeriods).get("2026-05-17");
+assert.ok(sparse, "sparse aggregator returned an entry");
+assert.equal(sparse.emoji, "🌥️");
 console.log("✓ weather aggregator");
 
 // --- 2. sun times -------------------------------------------------------------
@@ -81,15 +89,15 @@ const sBad = scoreStrandDay(may17Day, badWeather);
 assert.ok(sBad.score < sFav.score, `bad weather lowers score (${sBad.score} < ${sFav.score})`);
 assert.equal(sBad.rating, "unfavorable", `thunderstorm day should be unfavorable, got ${sBad.rating}`);
 
-// October day with a daytime low (fabricate) → favorable.
+// October day with mid-morning + mid-afternoon lows, well clear of twilight.
 const octDay = {
   date: "2026-10-15",
   label: "Thursday, October 15",
   tides: [
-    { time: "01:00", displayTime: "1:00 AM", type: "High", heightFt: 6.5 },
-    { time: "07:15", displayTime: "7:15 AM", type: "Low", heightFt: -0.4 },
-    { time: "13:30", displayTime: "1:30 PM", type: "High", heightFt: 6.2 },
-    { time: "19:45", displayTime: "7:45 PM", type: "Low", heightFt: -0.2 },
+    { time: "03:00", displayTime: "3:00 AM", type: "High", heightFt: 6.5 },
+    { time: "09:30", displayTime: "9:30 AM", type: "Low", heightFt: -0.4 },
+    { time: "15:30", displayTime: "3:30 PM", type: "High", heightFt: 6.2 },
+    { time: "21:45", displayTime: "9:45 PM", type: "Low", heightFt: -0.2 },
   ],
 };
 const sOct = scoreStrandDay(octDay, { windMphMax: 8, precipChancePct: 10, shortForecast: "Sunny", highF: 72, lowF: 58, windFromDir: "N", date: "2026-10-15", emoji: "☀️" });
@@ -99,6 +107,30 @@ assert.equal(sOct.rating, "favorable", `fall + calm + low ranges should be favor
 const emptyDay = { date: "2099-01-01", label: "Future", tides: [] };
 const sEmpty = scoreStrandDay(emptyDay);
 assert.equal(sEmpty.rating, "unfavorable");
+
+// Regression: a daytime low well-clear of twilight should NOT trigger the
+// "near twilight" reason (previously hard-wired by a Math.min(0, …) bug).
+const noonReasons = sOct.reasons.map((r) => r.label).join(" | ");
+assert.ok(
+  !/near twilight/i.test(noonReasons),
+  `Oct 7:15 AM / 7:45 PM lows are clear of twilight; got: ${noonReasons}`,
+);
+// A low at sunrise + 20 min SHOULD trigger the glare penalty.
+const twilightDay = {
+  date: "2026-10-15",
+  label: "Thursday, October 15",
+  tides: [
+    { time: "00:30", displayTime: "12:30 AM", type: "High", heightFt: 6.0 },
+    { time: "07:00", displayTime: "7:00 AM", type: "Low", heightFt: -0.3 }, // ~sunrise
+    { time: "13:00", displayTime: "1:00 PM", type: "High", heightFt: 5.8 },
+    { time: "19:15", displayTime: "7:15 PM", type: "Low", heightFt: -0.1 },
+  ],
+};
+const sTwi = scoreStrandDay(twilightDay);
+assert.ok(
+  sTwi.reasons.some((r) => /near twilight/i.test(r.label)),
+  "low near sunrise should trigger glare/twilight reason",
+);
 console.log("✓ strand scoring");
 
 console.log("\nAll smoke tests passed.");

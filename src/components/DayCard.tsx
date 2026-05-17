@@ -60,7 +60,13 @@ export function DayCard({ day, allDays, nap, weather, now, isToday }: Props) {
           </div>
         </div>
 
-        {weather && <WeatherSummary weather={weather} />}
+        {weather ? (
+          <WeatherSummary weather={weather} />
+        ) : (
+          <p className="day-card__no-weather muted">
+            No NWS forecast for this date yet · published ~7 days ahead.
+          </p>
+        )}
 
         <p className="day-recommendation">{recommendation}</p>
         <div className="badge-row">

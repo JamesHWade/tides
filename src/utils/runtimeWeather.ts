@@ -34,7 +34,7 @@ type NWSPeriod = {
   probabilityOfPrecipitation?: { value: number | null };
   windSpeed: string | number | null;
   windDirection: string | null;
-  shortForecast: string;
+  shortForecast?: string;
   detailedForecast?: string;
   icon?: string;
 };
@@ -65,7 +65,8 @@ const EMOJI_RULES: Array<[RegExp, string]> = [
   [/windy|breezy/i, "🌬️"],
 ];
 
-export function emojiFor(label: string): string {
+export function emojiFor(label: string | undefined | null): string {
+  if (!label) return "🌥️";
   for (const [re, e] of EMOJI_RULES) {
     if (re.test(label)) return e;
   }
@@ -88,7 +89,7 @@ export function aggregatePeriods(periods: NWSPeriod[]): Map<string, DayWeather> 
     };
     if (p.isDaytime) {
       existing.highF = p.temperature;
-      existing.shortForecast = p.shortForecast;
+      existing.shortForecast = p.shortForecast ?? "";
       existing.detailedForecast = p.detailedForecast;
       existing.icon = p.icon;
       existing.precipChancePct = p.probabilityOfPrecipitation?.value ?? existing.precipChancePct;
@@ -98,7 +99,7 @@ export function aggregatePeriods(periods: NWSPeriod[]): Map<string, DayWeather> 
     } else {
       existing.lowF = p.temperature;
       if (!existing.shortForecast) {
-        existing.shortForecast = p.shortForecast;
+        existing.shortForecast = p.shortForecast ?? "";
         existing.emoji = emojiFor(p.shortForecast);
       }
       if (existing.precipChancePct == null) {

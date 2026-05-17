@@ -60,8 +60,11 @@ export function TideChart({ day, allDays, nap, now }: Props) {
     return { points, dayStart, dayEnd, minH, maxH, nowSample };
   }, [day.date, allDays, now]);
 
-  const sun = sunTimes(day.date);
-  const napRange = napInterval(day.date, nap);
+  const sun = useMemo(() => sunTimes(day.date), [day.date]);
+  const napRange = useMemo(
+    () => napInterval(day.date, nap),
+    [day.date, nap.napStart, nap.napEnd],
+  );
 
   useEffect(() => {
     const el = containerRef.current;
@@ -103,6 +106,11 @@ export function TideChart({ day, allDays, nap, now }: Props) {
         overflow: "visible",
       },
       x: {
+        // `type: "utc"` is intentional — the codebase stores Eastern wall-clock
+        // moments in the UTC fields of a Date (see the convention at the top
+        // of utils/tideUtils.ts). Plot reading them in UTC keeps the axis and
+        // marks aligned. Do NOT change this to a real timezone or every tick
+        // shifts by 4–5 hours.
         type: "utc",
         domain: [dayStart, dayEnd],
         tickFormat: (d: Date) => formatHour(d),

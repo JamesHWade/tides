@@ -10,7 +10,7 @@ import type { DayWeather } from "./runtimeWeather";
 import { timeOn, addMinutes, windowsOverlap, formatClock } from "./tideUtils";
 import { sunTimes } from "./sunTimes";
 
-export type StrandRating = "favorable" | "marginal" | "unfavorable" | "off-season";
+export type StrandRating = "favorable" | "marginal" | "unfavorable";
 
 export type StrandReason = {
   /** Short label, e.g. "Low tide in daylight". */
@@ -46,13 +46,6 @@ const SEASON_BONUS: Record<number, number> = {
 
 function monthOf(dateISO: string): number {
   return Number(dateISO.slice(5, 7));
-}
-
-/** Inclusive minute-distance between an instant and a window. 0 if inside. */
-function minutesOutside(t: Date, start: Date, end: Date): number {
-  if (t >= start && t <= end) return 0;
-  if (t < start) return (start.getTime() - t.getTime()) / 60_000;
-  return (t.getTime() - end.getTime()) / 60_000;
 }
 
 /**
@@ -93,13 +86,14 @@ export function scoreStrandDay(day: DayPlan, weather?: DayWeather): StrandScore 
     const daylightOverlap = windowsOverlap(start, end, sun.sunrise, sun.sunset);
     if (!daylightOverlap) continue; // nighttime low, useless for observation
 
-    // Penalize lows close to sunrise/sunset (glare, dim light).
-    const distToTwilight = Math.min(
-      minutesOutside(center, sun.sunrise, sun.sunset),
+    // Penalize lows whose center sits close to sunrise/sunset (dim light /
+    // glare). Distance is min(|center - sunrise|, |center - sunset|) regardless
+    // of whether center is just inside or just outside daylight.
+    const distToTwilightMin = Math.min(
       Math.abs(center.getTime() - sun.sunrise.getTime()) / 60_000,
       Math.abs(center.getTime() - sun.sunset.getTime()) / 60_000,
     );
-    const glarePenalty = distToTwilight < 60 ? -0.5 : 0;
+    const glarePenalty = distToTwilightMin < 60 ? -0.5 : 0;
 
     const localScore = 1 + glarePenalty; // base "low in daylight" credit
     if (!best || localScore > best.localScore) {
@@ -242,8 +236,6 @@ export function ratingLabel(r: StrandRating): string {
       return "Marginal";
     case "unfavorable":
       return "Unfavorable";
-    case "off-season":
-      return "Off-season";
   }
 }
 

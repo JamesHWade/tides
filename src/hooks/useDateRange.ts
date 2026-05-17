@@ -9,7 +9,17 @@ export type DateRangeWithMeta = DateRange & {
   isTrip: boolean;
 };
 
+const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidISO(s: string): boolean {
+  if (!ISO_RE.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  return !Number.isNaN(d.getTime());
+}
+
 function clampRange(range: DateRange): DateRange {
+  const fallback = { startISO: TRIP_RANGE.startISO, endISO: TRIP_RANGE.endISO };
+  if (!isValidISO(range.startISO) || !isValidISO(range.endISO)) return fallback;
   if (range.endISO < range.startISO) {
     return { startISO: range.startISO, endISO: range.startISO };
   }
