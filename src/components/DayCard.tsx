@@ -8,15 +8,19 @@ import {
   strandFeedingWatchWindow,
   type NapSettings,
 } from "../utils/tideUtils";
+import { sunTimes } from "../utils/sunTimes";
 import { RecommendationBadge } from "./RecommendationBadge";
-import { TideTimeline } from "./TideTimeline";
+import { TideChart } from "./TideChart";
 
 type Props = {
   day: DayPlan;
+  allDays: DayPlan[];
   nap: NapSettings;
+  now?: Date;
+  isToday?: boolean;
 };
 
-export function DayCard({ day, nap }: Props) {
+export function DayCard({ day, allDays, nap, now, isToday }: Props) {
   const lows = day.tides.filter((t) => t.type === "Low");
   const highs = day.tides.filter((t) => t.type === "High");
   const napRange = napInterval(day.date, nap);
@@ -29,10 +33,27 @@ export function DayCard({ day, nap }: Props) {
   const allConflict =
     playWindows.length > 0 && playWindows.every((w) => conflictsWithNap(w, napRange));
 
+  const sun = sunTimes(day.date);
+
   return (
-    <article className="card day-card" aria-labelledby={`day-${day.date}`}>
+    <article
+      id={`day-${day.date}`}
+      className={`card day-card ${isToday ? "day-card--today" : ""}`}
+      aria-labelledby={`day-${day.date}-h`}
+    >
       <header className="day-head">
-        <h3 id={`day-${day.date}`}>{day.label}</h3>
+        <div className="day-head__row">
+          <h3 id={`day-${day.date}-h`}>
+            {isToday && <span className="day-head__today-pill">Today</span>}
+            {day.label}
+          </h3>
+          <div className="day-head__sun" title="Daylight">
+            <span aria-hidden="true">☀</span>
+            <span>
+              {sun.sunriseLabel} – {sun.sunsetLabel}
+            </span>
+          </div>
+        </div>
         <p className="day-recommendation">{recommendation}</p>
         <div className="badge-row">
           {allConflict ? (
@@ -45,7 +66,7 @@ export function DayCard({ day, nap }: Props) {
         </div>
       </header>
 
-      <TideTimeline day={day} nap={nap} />
+      <TideChart day={day} allDays={allDays} nap={nap} now={isToday ? now : undefined} />
 
       <dl className="tide-grid">
         <div>
