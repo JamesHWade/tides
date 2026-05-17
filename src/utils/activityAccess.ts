@@ -26,7 +26,10 @@ function hasAny(flags: AccessFlag[] | undefined, access: AccessSettings): boolea
  * Whether the family can use this activity given their saved access flags.
  *
  * Rules:
- *   - `preferPublicOnly` short-circuits: only `public: true` activities pass.
+ *   - `preferPublicOnly` short-circuits: the activity must be `public: true`,
+ *     and any reservation-required activity is also excluded so the result
+ *     matches the UI copy ("Hide every gated pool, club, and reservation-only
+ *     activity").
  *   - `allOf` requires every listed flag.
  *   - `anyOf` requires at least one listed flag.
  *   - If both lists are empty/omitted but `public` is true, the activity is
@@ -38,7 +41,11 @@ export function isActivityAllowed(
   access: AccessSettings,
 ): boolean {
   const rule = activity.access;
-  if (access.preferPublicOnly) return rule.public === true;
+  if (access.preferPublicOnly) {
+    if (rule.public !== true) return false;
+    if (activity.reservationRequired === true) return false;
+    return true;
+  }
   if (rule.public === true && !rule.allOf?.length && !rule.anyOf?.length) {
     return true;
   }
@@ -57,10 +64,11 @@ export function unmetAccessLabels(
       if (!access[f]) missing.push(f);
     }
   }
-  if (rule.anyOf && !rule.anyOf.some((f) => access[f])) {
-    // Surface a representative requirement; collapsing duplicates is fine —
-    // the UI only needs the user to understand *that* it's gated.
-    for (const f of rule.anyOf) missing.push(f);
+  if (rule.anyOf && rule.anyOf.length > 0 && !rule.anyOf.some((f) => access[f])) {
+    // The user only needs to understand *that* one of these flags would
+    // unlock the activity — surface the first as representative rather than
+    // every alternative.
+    missing.push(rule.anyOf[0]);
   }
   const seen = new Set<AccessFlag>();
   return missing

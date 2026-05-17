@@ -103,7 +103,21 @@ export default function App() {
         now,
       }),
     );
-    return pickBestDays(schedules);
+    // For the "best public-only day" pick, score a parallel set of schedules
+    // computed as if preferPublicOnly were on — fallback list length alone is
+    // a fixed-size set and not informative.
+    const publicOnlyAccess = { ...access, preferPublicOnly: true };
+    const publicOnly = days.map((d) =>
+      optimizeDaySchedule({
+        day: d,
+        allDays: days,
+        nap,
+        weather: weather.byDate.get(d.date),
+        access: publicOnlyAccess,
+        now,
+      }),
+    );
+    return pickBestDays(schedules, publicOnly);
   }, [days, nap, weather.byDate, access, now]);
 
   useEffect(() => {

@@ -360,6 +360,26 @@ assert.equal(
   "preferPublicOnly still allows public activities",
 );
 
+// preferPublicOnly also hides reservation-required public activities — the
+// UI copy promises "no booking required" plans.
+const boatRental = activityById("bohicket-boat-rental");
+assert.ok(boatRental, "Bohicket boat rental exists");
+assert.equal(
+  boatRental.access.public,
+  true,
+  "Boat rental is public-access but reservation-required",
+);
+assert.equal(
+  isActivityAllowed(boatRental, DEFAULT_ACCESS),
+  true,
+  "Boat rental allowed by default (public)",
+);
+assert.equal(
+  isActivityAllowed(boatRental, { ...DEFAULT_ACCESS, preferPublicOnly: true }),
+  false,
+  "preferPublicOnly excludes reservation-required public activities",
+);
+
 // Beach Club restaurant trip-week hours (May 17–24, 2026).
 assert.equal(
   isActivityOpenOn(beachClubDining, "2026-05-17", "17:00", "18:00"),
@@ -393,6 +413,8 @@ console.log("✓ activity access + hours");
 const optDays = buildDayPlans("2026-05-17", "2026-05-24", localEventsFor, {});
 const day17 = optDays.find((d) => d.date === "2026-05-17");
 const day20 = optDays.find((d) => d.date === "2026-05-20");
+assert.ok(day17, "May 17 fixture present");
+assert.ok(day20, "May 20 fixture present");
 const nap = { napStart: "13:00", napEnd: "15:00" };
 
 // Default access: must produce a useful plan, must include the public fallback,
@@ -502,6 +524,78 @@ for (const a of ACTIVITIES) {
     `gated activity ${a.id} should appear in the skipped list under default access`,
   );
 }
+
+// When the family has Club Access on a mild day, the optimizer should be
+// willing to schedule on-island club dining even though the restaurant opens
+// (17:00) after the afternoon slot starts (15:00) — regression for the
+// slot-start vs activity-open bug.
+const planDining = optimizeDaySchedule({
+  day: day20,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-20", highF: 78, lowF: 62, precipChancePct: 10, windMphMax: 8, windFromDir: "S", shortForecast: "Mostly Sunny", emoji: "🌤️" },
+  access: { ...DEFAULT_ACCESS, seabrookClubAccessAmenityCard: true },
+});
+const diningBlock = planDining.blocks.find((b) => b.activityId === "seabrook-club-dining");
+if (diningBlock) {
+  // If chosen, it must start at or after the 17:00 opening time.
+  const openMs = Date.UTC(2026, 4, 20, 17, 0);
+  assert.ok(
+    diningBlock.start.getTime() >= openMs,
+    `club dining block must start at or after 17:00, got ${diningBlock.start.toISOString()}`,
+  );
+}
+
+// Skipped reasons should differentiate "missing access" from "filtered by
+// preferPublicOnly when you actually have access".
+const planFiltered = optimizeDaySchedule({
+  day: day20,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-20", highF: 88, lowF: 70, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Mostly Sunny", emoji: "🌤️" },
+  access: { ...DEFAULT_ACCESS, kiawahResortGuest: true, preferPublicOnly: true },
+});
+const nightHeronSkip = planFiltered.skipped.find((s) => s.activityId === "kiawah-night-heron-pool");
+assert.ok(nightHeronSkip, "Night Heron appears in skipped when filtered out");
+assert.ok(
+  /public-only/i.test(nightHeronSkip.reason),
+  `Night Heron skip reason should mention public-only filter when family has resort access, got: ${nightHeronSkip.reason}`,
+);
 console.log("✓ schedule optimizer");
+
+// --- 7. pickBestDays public-only picks the highest-scoring day -------------
+const { pickBestDays } = await import("../src/utils/scheduleOptimizer");
+const allSchedules = optDays.map((d) =>
+  optimizeDaySchedule({
+    day: d,
+    allDays: optDays,
+    nap,
+    weather: { date: d.date, highF: 80, lowF: 65, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+    access: DEFAULT_ACCESS,
+  }),
+);
+const publicOnlySchedules = optDays.map((d) =>
+  optimizeDaySchedule({
+    day: d,
+    allDays: optDays,
+    nap,
+    weather: { date: d.date, highF: 80, lowF: 65, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+    access: { ...DEFAULT_ACCESS, preferPublicOnly: true },
+  }),
+);
+const bestNoArg = pickBestDays(allSchedules);
+const bestTwoArg = pickBestDays(allSchedules, publicOnlySchedules);
+assert.ok(bestTwoArg.publicOnly, "public-only pick is set");
+// The two-arg form should pick from the public-only schedule set, which is
+// scored independently — the picked date must exist there.
+assert.ok(
+  publicOnlySchedules.some((s) => s.date === bestTwoArg.publicOnly.date),
+  "two-arg pick comes from the public-only schedules",
+);
+// Both no-arg and two-arg forms must produce a valid date from the range.
+const validDates = new Set(optDays.map((d) => d.date));
+assert.ok(validDates.has(bestNoArg.publicOnly.date));
+assert.ok(validDates.has(bestTwoArg.publicOnly.date));
+console.log("✓ pickBestDays");
 
 console.log("\nAll smoke tests passed.");

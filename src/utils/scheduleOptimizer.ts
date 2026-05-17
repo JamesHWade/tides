@@ -88,6 +88,25 @@ const PUBLIC_FALLBACK_IDS = [
   "public-beach-walk",
 ];
 
+// Local mirrors of activityAccess's hasAll / hasAny. Kept inline so the
+// optimizer can report *why* a gated activity is hidden without re-running
+// isActivityAllowed (which collapses several causes into a single boolean).
+function hasAllOfRule(
+  flags: ReadonlyArray<keyof AccessSettings> | undefined,
+  access: AccessSettings,
+): boolean {
+  if (!flags || flags.length === 0) return true;
+  return flags.every((f) => access[f] === true);
+}
+
+function hasAnyOfRule(
+  flags: ReadonlyArray<keyof AccessSettings> | undefined,
+  access: AccessSettings,
+): boolean {
+  if (!flags || flags.length === 0) return true;
+  return flags.some((f) => access[f] === true);
+}
+
 // ---------------------------------------------------------------------------
 // Weather classification
 // ---------------------------------------------------------------------------
@@ -460,8 +479,16 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
 
     let chosenBlock: ScheduleBlock | null = null;
     for (const { a, s } of ranked) {
-      const desiredStart = slot.start;
-      const dur = Math.min(a.durationMins, slot.end.getTime() - slot.start.getTime());
+      // Start at the later of slot-open and activity-open so a dining option
+      // with `open: 17:00` can still land in a 15:00–19:00 afternoon slot.
+      const hours = activityHoursOn(a, day.date);
+      const desiredStart =
+        hours && hours.open > slot.start ? hours.open : slot.start;
+      if (desiredStart >= slot.end) continue;
+      const dur = Math.min(
+        a.durationMins,
+        slot.end.getTime() - desiredStart.getTime(),
+      );
       const block = buildActivityBlock(
         a,
         day.date,
@@ -493,12 +520,26 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     if (block) publicFallback.push(block);
   }
 
-  // 7. Skipped (gated) list — for "available if you have access" UI.
+  // 7. Skipped list — for the "available if you have access" UI. When the
+  // family has the credentials but turned on preferPublicOnly, the activity
+  // was hidden by their own filter, not by missing access — explain that.
   for (const a of gated) {
-    skipped.push({
-      activityId: a.id,
-      reason: "Requires access you haven't enabled yet.",
-    });
+    const hasFlags =
+      hasAllOfRule(a.access.allOf, access) &&
+      hasAnyOfRule(a.access.anyOf, access);
+    let reason: string;
+    if (access.preferPublicOnly && hasFlags && a.access.public !== true) {
+      reason = "Hidden by your public-only preference.";
+    } else if (
+      access.preferPublicOnly &&
+      a.access.public === true &&
+      a.reservationRequired === true
+    ) {
+      reason = "Hidden by public-only preference (needs reservation).";
+    } else {
+      reason = "Requires access you haven't enabled yet.";
+    }
+    skipped.push({ activityId: a.id, reason });
   }
 
   // 8. Sort blocks by start time.
@@ -642,7 +683,19 @@ export type BestDays = {
   publicOnly?: DaySchedule;
 };
 
-export function pickBestDays(schedules: DaySchedule[]): BestDays {
+/**
+ * Pick "best day for X" across a range.
+ *
+ * The strand/pool/indoor picks rank by each schedule's own `score`. For the
+ * public-only pick, fallback list length is uninformative (it's a fixed
+ * 3-item set), so callers can pass a second `publicOnlySchedules` array
+ * — schedules computed once with `preferPublicOnly: true` — and the highest
+ * `score` from that set is used.
+ */
+export function pickBestDays(
+  schedules: DaySchedule[],
+  publicOnlySchedules?: DaySchedule[],
+): BestDays {
   const result: BestDays = {};
   const strandPick = schedules
     .filter((s) => s.bestUseOfDay === "strandAttempt")
@@ -656,9 +709,10 @@ export function pickBestDays(schedules: DaySchedule[]): BestDays {
     .filter((s) => s.bestUseOfDay === "indoorFallback")
     .sort((a, b) => b.score - a.score)[0];
   if (indoorPick) result.indoor = indoorPick;
-  const publicPick = schedules
-    .filter((s) => s.publicFallback.length > 0)
-    .sort((a, b) => b.publicFallback.length - a.publicFallback.length)[0];
+  const publicSource = publicOnlySchedules ?? schedules;
+  const publicPick = publicSource
+    .slice()
+    .sort((a, b) => b.score - a.score)[0];
   if (publicPick) result.publicOnly = publicPick;
   return result;
 }
