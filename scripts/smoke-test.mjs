@@ -16,8 +16,13 @@ const {
   lowTidePlayWindow,
   scoreStrandDay,
   sunTimes,
+  isActivityAllowed,
+  isActivityOpenOn,
+  optimizeDaySchedule,
 } = await import("../src/utils/index");
 const { buildDayPlans, localEventsFor } = await import("../src/data/tides");
+const { ACTIVITIES, activityById } = await import("../src/data/activities");
+const { DEFAULT_ACCESS } = await import("../src/hooks/useAccessSettings");
 
 // --- 1. weather aggregator ----------------------------------------------------
 const periods = [
@@ -222,5 +227,281 @@ assert.ok(
   `daytime low with clear nap should produce an afternoon rec, got: ${recDay}`,
 );
 console.log("✓ daylight-aware recommendations");
+
+// --- 5. activity access filtering --------------------------------------------
+// Default settings should hide every gated activity and allow only the
+// public-fallback ones (Freshfields, Bohicket, public beach walks).
+const nightHeron = activityById("kiawah-night-heron-pool");
+const sanctuaryPool = activityById("kiawah-sanctuary-pool");
+const treehouse = activityById("kiawah-treehouse");
+const beachClubPool = activityById("seabrook-beach-club-pool");
+const clubDining = activityById("seabrook-club-dining");
+const beachClubDining = activityById("seabrook-beach-club-dining");
+const freshfields = activityById("freshfields-village");
+const publicBeachWalk = activityById("public-beach-walk");
+assert.ok(nightHeron, "Night Heron activity exists");
+assert.ok(sanctuaryPool, "Sanctuary activity exists");
+assert.ok(treehouse, "Treehouse activity exists");
+assert.ok(beachClubPool, "Seabrook Beach Club pool activity exists");
+assert.ok(clubDining, "Seabrook club dining activity exists");
+assert.ok(beachClubDining, "Seabrook Beach Club dining activity exists");
+assert.ok(freshfields, "Freshfields activity exists");
+assert.ok(publicBeachWalk, "Public beach walk activity exists");
+
+// Default access = only public activities allowed.
+assert.equal(
+  isActivityAllowed(nightHeron, DEFAULT_ACCESS),
+  false,
+  "Night Heron blocked when no Kiawah access set",
+);
+assert.equal(
+  isActivityAllowed(sanctuaryPool, DEFAULT_ACCESS),
+  false,
+  "Sanctuary blocked by default",
+);
+assert.equal(
+  isActivityAllowed(treehouse, DEFAULT_ACCESS),
+  false,
+  "Treehouse blocked by default",
+);
+assert.equal(
+  isActivityAllowed(beachClubPool, DEFAULT_ACCESS),
+  false,
+  "Beach Club pool blocked by default",
+);
+assert.equal(
+  isActivityAllowed(clubDining, DEFAULT_ACCESS),
+  false,
+  "Seabrook club dining blocked by default",
+);
+assert.equal(
+  isActivityAllowed(freshfields, DEFAULT_ACCESS),
+  true,
+  "Freshfields is public by default",
+);
+assert.equal(
+  isActivityAllowed(publicBeachWalk, DEFAULT_ACCESS),
+  true,
+  "Public beach walk allowed by default",
+);
+
+// Either Kiawah resort or Governor's Club unlocks Night Heron.
+assert.equal(
+  isActivityAllowed(nightHeron, { ...DEFAULT_ACCESS, kiawahResortGuest: true }),
+  true,
+  "Night Heron allowed for resort guests",
+);
+assert.equal(
+  isActivityAllowed(nightHeron, { ...DEFAULT_ACCESS, kiawahGovernorClub: true }),
+  true,
+  "Night Heron allowed for Governor's Club",
+);
+
+// Sanctuary requires the Sanctuary flag specifically (allOf), not the resort one.
+assert.equal(
+  isActivityAllowed(sanctuaryPool, { ...DEFAULT_ACCESS, kiawahResortGuest: true }),
+  false,
+  "Sanctuary pool requires Sanctuary hotel flag, not resort guest",
+);
+assert.equal(
+  isActivityAllowed(sanctuaryPool, { ...DEFAULT_ACCESS, kiawahSanctuaryGuest: true }),
+  true,
+  "Sanctuary pool unlocks with Sanctuary hotel flag",
+);
+
+// Treehouse: off-island family without confirmed reservation = blocked.
+assert.equal(
+  isActivityAllowed(treehouse, { ...DEFAULT_ACCESS, stayBase: "offIsland" }),
+  false,
+  "Treehouse blocked for off-island without reservation",
+);
+assert.equal(
+  isActivityAllowed(treehouse, {
+    ...DEFAULT_ACCESS,
+    stayBase: "offIsland",
+    kiawahConfirmedRecreationReservation: true,
+  }),
+  true,
+  "Treehouse allowed with confirmed reservation",
+);
+
+// Seabrook Beach Club pool requires Digital Amenity Pass.
+assert.equal(
+  isActivityAllowed(beachClubPool, { ...DEFAULT_ACCESS, seabrookDigitalAmenityPass: true }),
+  true,
+  "Beach Club pool unlocks with Digital Amenity Pass",
+);
+
+// Seabrook club dining requires the Club Access Amenity Card.
+assert.equal(
+  isActivityAllowed(clubDining, { ...DEFAULT_ACCESS, seabrookDigitalAmenityPass: true }),
+  false,
+  "Club dining still blocked without Club Access Amenity Card",
+);
+assert.equal(
+  isActivityAllowed(clubDining, { ...DEFAULT_ACCESS, seabrookClubAccessAmenityCard: true }),
+  true,
+  "Club dining unlocks with Club Access Amenity Card",
+);
+
+// preferPublicOnly hides every gated activity, even when flags are set.
+assert.equal(
+  isActivityAllowed(nightHeron, {
+    ...DEFAULT_ACCESS,
+    kiawahResortGuest: true,
+    preferPublicOnly: true,
+  }),
+  false,
+  "preferPublicOnly overrides gated activities",
+);
+assert.equal(
+  isActivityAllowed(freshfields, { ...DEFAULT_ACCESS, preferPublicOnly: true }),
+  true,
+  "preferPublicOnly still allows public activities",
+);
+
+// Beach Club restaurant trip-week hours (May 17–24, 2026).
+assert.equal(
+  isActivityOpenOn(beachClubDining, "2026-05-17", "17:00", "18:00"),
+  true,
+  "Beach Club dining open at 5–6 PM on May 17 (early-season hours: 10 AM–6 PM)",
+);
+assert.equal(
+  isActivityOpenOn(beachClubDining, "2026-05-17", "18:30", "19:30"),
+  false,
+  "Beach Club dining closed by 6 PM on May 17 (early-season)",
+);
+assert.equal(
+  isActivityOpenOn(beachClubDining, "2026-05-22", "19:00", "19:30"),
+  true,
+  "Beach Club dining still open at 7 PM on May 22+ (later hours)",
+);
+// Pool itself opens at 9 AM during the trip week.
+assert.equal(
+  isActivityOpenOn(beachClubPool, "2026-05-17", "09:00", "10:00"),
+  true,
+  "Beach Club pool opens at 9 AM",
+);
+assert.equal(
+  isActivityOpenOn(beachClubPool, "2026-05-17", "06:00", "08:00"),
+  false,
+  "Beach Club pool not open at 6 AM",
+);
+console.log("✓ activity access + hours");
+
+// --- 6. schedule optimizer ---------------------------------------------------
+const optDays = buildDayPlans("2026-05-17", "2026-05-24", localEventsFor, {});
+const day17 = optDays.find((d) => d.date === "2026-05-17");
+const day20 = optDays.find((d) => d.date === "2026-05-20");
+const nap = { napStart: "13:00", napEnd: "15:00" };
+
+// Default access: must produce a useful plan, must include the public fallback,
+// must not schedule any gated activity, and must not put a strand block on a
+// thunderstorm day.
+const planDefault = optimizeDaySchedule({
+  day: day17,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-17", highF: 82, lowF: 65, precipChancePct: 20, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+});
+assert.ok(planDefault.blocks.length > 0, "Default access still yields blocks");
+assert.ok(
+  planDefault.publicFallback.length > 0,
+  "Public fallback is always present",
+);
+for (const b of planDefault.blocks) {
+  if (!b.activityId) continue;
+  const act = activityById(b.activityId);
+  assert.ok(
+    !act || isActivityAllowed(act, DEFAULT_ACCESS),
+    `block ${b.label} (${b.activityId}) is allowed under default access`,
+  );
+}
+
+// Favorable strand day (May 17 has a 1:51 PM low) → strand block scheduled,
+// trimmed against nap. With the default 13:00–15:00 nap and a 11:51–15:51
+// raw strand window, the optimizer should keep the post-nap piece (~15:00–15:51,
+// which is < 60 min so actually it should pick the pre-nap piece if larger).
+// Either way: a strand block should exist with no nap collision.
+const strandBlock = planDefault.blocks.find((b) => b.kind === "strand");
+assert.ok(strandBlock, "favorable strand day should produce a strand block");
+// Strand block must not overlap the nap window (13:00–15:00 in station-tz UTC).
+const napStartT = new Date(`${day17.date}T13:00:00Z`);
+const napEndT = new Date(`${day17.date}T15:00:00Z`);
+const overlapsNap =
+  strandBlock.start < napEndT && strandBlock.end > napStartT;
+assert.equal(overlapsNap, false, "strand block does not collide with the nap window");
+
+// Thunderstorm day → no strand block, indoor/public fallback steer.
+const planThunder = optimizeDaySchedule({
+  day: day17,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-17", highF: 75, lowF: 65, precipChancePct: 80, windMphMax: 15, windFromDir: "SW", shortForecast: "Thunderstorms Likely", emoji: "⛈️" },
+  access: DEFAULT_ACCESS,
+});
+assert.ok(
+  !planThunder.blocks.some((b) => b.kind === "strand"),
+  "thunderstorm day must not schedule a strand block",
+);
+assert.equal(
+  planThunder.bestUseOfDay,
+  "indoorFallback",
+  "thunderstorm day labels as indoor fallback",
+);
+assert.ok(
+  planThunder.publicFallback.length > 0,
+  "thunderstorm day still has a public fallback",
+);
+
+// With full Kiawah resort access on a hot day, a Kiawah pool should appear in
+// the schedule — confirming amenity access unlocks gated activities.
+const planResort = optimizeDaySchedule({
+  day: day20,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-20", highF: 91, lowF: 72, precipChancePct: 5, windMphMax: 6, windFromDir: "S", shortForecast: "Sunny", emoji: "☀️" },
+  access: { ...DEFAULT_ACCESS, kiawahResortGuest: true },
+});
+const hasKiawahPool = planResort.blocks.some(
+  (b) =>
+    b.activityId === "kiawah-night-heron-pool" ||
+    b.activityId === "kiawah-west-beach-pool",
+);
+assert.ok(
+  hasKiawahPool,
+  "Kiawah pool should be scheduled on a hot day when resort access is enabled",
+);
+
+// preferPublicOnly removes every gated activity even when flags are set.
+const planPublicOnly = optimizeDaySchedule({
+  day: day20,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-20", highF: 88, lowF: 70, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Mostly Sunny", emoji: "🌤️" },
+  access: { ...DEFAULT_ACCESS, kiawahResortGuest: true, preferPublicOnly: true },
+});
+for (const b of planPublicOnly.blocks) {
+  if (!b.activityId) continue;
+  const act = activityById(b.activityId);
+  assert.ok(
+    act && act.access.public === true,
+    `preferPublicOnly must only schedule public activities; got ${b.activityId}`,
+  );
+}
+
+// Every gated catalog activity should appear in the `skipped` list under
+// default access (sanity check that the "available if you have access" UI
+// won't be empty).
+const skippedIds = new Set(planDefault.skipped.map((s) => s.activityId));
+for (const a of ACTIVITIES) {
+  if (a.access.public === true && !a.access.allOf?.length && !a.access.anyOf?.length) continue;
+  assert.ok(
+    skippedIds.has(a.id),
+    `gated activity ${a.id} should appear in the skipped list under default access`,
+  );
+}
+console.log("✓ schedule optimizer");
 
 console.log("\nAll smoke tests passed.");

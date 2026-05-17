@@ -1296,6 +1296,312 @@ a {
   }
 }
 
+/* ---------- Access settings ---------- */
+.access-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.access-base {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  max-width: 320px;
+}
+
+.access-base select {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--sea-200);
+  background: var(--sea-50);
+  color: var(--ink);
+  min-height: 44px;
+}
+
+.access-group {
+  border: 1px solid rgba(31, 111, 139, 0.14);
+  border-radius: 12px;
+  padding: 10px 14px 12px;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.65);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.access-group legend {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sea-700);
+  padding: 0 6px;
+}
+
+.access-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.92rem;
+  color: var(--ink);
+  line-height: 1.4;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.access-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--sea-600);
+}
+
+.access-check__hint {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ---------- Best-day summary ---------- */
+.best-day-summary {
+  background: linear-gradient(180deg, #ffffff 0%, var(--sand-50) 100%);
+}
+
+.best-day-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .best-day-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.best-day-pick {
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid rgba(31, 111, 139, 0.14);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  font: inherit;
+  color: var(--ink);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.best-day-pick:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.best-day-pick__label {
+  font-weight: 700;
+  color: var(--sea-700);
+  font-size: 0.92rem;
+}
+
+.best-day-pick__date {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--coral);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.best-day-pick__detail {
+  grid-column: 1 / -1;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* ---------- Family schedule card ---------- */
+.schedule-card {
+  background: linear-gradient(180deg, #ffffff 0%, var(--sea-50) 100%);
+  border: 1px solid rgba(31, 111, 139, 0.12);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.schedule-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.schedule-card__title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sea-700);
+}
+
+.schedule-card__headline {
+  font-size: 1rem;
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.schedule-blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-block {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border-left: 4px solid var(--sea-400);
+}
+
+.schedule-block--fixed {
+  border-left-color: var(--muted);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.schedule-block--tide {
+  border-left-color: var(--sun);
+  background: rgba(255, 200, 87, 0.12);
+}
+
+.schedule-block--strand {
+  border-left-color: var(--kelp);
+  background: rgba(43, 138, 111, 0.1);
+}
+
+.schedule-block--activity {
+  border-left-color: var(--sea-400);
+}
+
+.schedule-block--fallback {
+  border-left-color: var(--coral);
+  background: rgba(255, 126, 107, 0.08);
+}
+
+.schedule-block__time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--sea-700);
+  font-weight: 600;
+}
+
+.schedule-block__kind {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.schedule-block__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.schedule-block__body strong {
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.schedule-block__body p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.schedule-block__warn {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 0.78rem;
+  color: #8a6d12;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.schedule-card__public {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--sea-700);
+  line-height: 1.4;
+}
+
+.schedule-card__hidden {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.schedule-card__gated {
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.schedule-card__gated summary {
+  cursor: pointer;
+  color: var(--sea-700);
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.schedule-card__gated ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+@media (max-width: 520px) {
+  .schedule-block {
+    grid-template-columns: 90px 1fr;
+    gap: 8px;
+    padding: 7px 9px;
+  }
+  .schedule-block__body strong {
+    font-size: 0.9rem;
+  }
+  .schedule-block__body p {
+    font-size: 0.8rem;
+  }
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -7,3 +7,5 @@ export * from "./sunTimes";
 export * from "./runtimeTides";
 export * from "./runtimeWeather";
 export * from "./strandScore";
+export * from "./activityAccess";
+export * from "./scheduleOptimizer";
