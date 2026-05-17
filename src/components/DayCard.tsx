@@ -6,28 +6,31 @@ import {
   formatWindow,
   lowTidePlayWindow,
   napInterval,
-  strandFeedingWatchWindow,
   type NapSettings,
 } from "../utils/tideUtils";
 import { sunTimes } from "../utils/sunTimes";
 import { RecommendationBadge } from "./RecommendationBadge";
 import { TideChart } from "./TideChart";
+import { WeatherSummary } from "./WeatherSummary";
+import { StrandScoreCard } from "./StrandScoreCard";
+import { scoreStrandDay } from "../utils/strandScore";
+import type { DayWeather } from "../utils/runtimeWeather";
 
 type Props = {
   day: DayPlan;
   allDays: DayPlan[];
   nap: NapSettings;
+  weather?: DayWeather;
   now?: Date;
   isToday?: boolean;
 };
 
-export function DayCard({ day, allDays, nap, now, isToday }: Props) {
+export function DayCard({ day, allDays, nap, weather, now, isToday }: Props) {
   const lows = day.tides.filter((t) => t.type === "Low");
   const highs = day.tides.filter((t) => t.type === "High");
   const napRange = napInterval(day.date, nap);
 
   const playWindows = lows.map((l) => lowTidePlayWindow(day, l));
-  const watchWindows = lows.map((l) => strandFeedingWatchWindow(day, l));
   const recommendation = bestDailyRecommendation(day, nap);
 
   const anyConflict = playWindows.some((w) => conflictsWithNap(w, napRange));
@@ -35,6 +38,7 @@ export function DayCard({ day, allDays, nap, now, isToday }: Props) {
     playWindows.length > 0 && playWindows.every((w) => conflictsWithNap(w, napRange));
 
   const sun = sunTimes(day.date);
+  const strand = scoreStrandDay(day, weather);
 
   return (
     <article
@@ -55,6 +59,9 @@ export function DayCard({ day, allDays, nap, now, isToday }: Props) {
             </span>
           </div>
         </div>
+
+        {weather && <WeatherSummary weather={weather} />}
+
         <p className="day-recommendation">{recommendation}</p>
         <div className="badge-row">
           {allConflict ? (
@@ -114,20 +121,7 @@ export function DayCard({ day, allDays, nap, now, isToday }: Props) {
           );
         })}
 
-        {watchWindows.map((w) => (
-          <div key={`watch-${w.start.toISOString()}`} className="window-item">
-            <div className="window-title">
-              <RecommendationBadge variant="watch">
-                Possible strand-feeding watch
-              </RecommendationBadge>
-              <span className="window-time">{formatWindow(w)}</span>
-            </div>
-            <p className="window-sub">
-              Wildlife activity is never guaranteed. Stay back ≥15 yards from
-              the waterline and never approach.
-            </p>
-          </div>
-        ))}
+        <StrandScoreCard score={strand} />
       </div>
 
       {day.notes && day.notes.length > 0 && (

@@ -1,5 +1,4 @@
-import type { DayPlan } from "../data/tides";
-import { TRIP_RANGE } from "../data/tides";
+import type { DayPlan, DateRange } from "../data/tides";
 import {
   currentTideState,
   flattenTides,
@@ -12,6 +11,7 @@ type Props = {
   days: DayPlan[];
   /** Station-local wall-clock-UTC `now`, owned by App. */
   now: Date;
+  range: DateRange;
 };
 
 function dayNumber(now: Date, start: Date, end: Date): number | null {
@@ -24,12 +24,12 @@ function tripDays(start: Date, end: Date): number {
   return Math.round((end.getTime() - start.getTime()) / 86400000);
 }
 
-export function TripStatus({ days, now }: Props) {
+export function TripStatus({ days, now, range }: Props) {
   const timeline = flattenTides(days);
   const state = currentTideState(timeline, now);
 
-  const start = timeOn(TRIP_RANGE.startISO, "00:00");
-  const end = new Date(timeOn(TRIP_RANGE.endISO, "00:00").getTime() + 86400000);
+  const start = timeOn(range.startISO, "00:00");
+  const end = new Date(timeOn(range.endISO, "00:00").getTime() + 86400000);
   const dayN = dayNumber(now, start, end);
   const totalDays = tripDays(start, end);
 

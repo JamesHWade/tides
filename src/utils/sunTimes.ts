@@ -1,14 +1,11 @@
 // Lightweight sunrise/sunset for the Kiawah/Seabrook area. Results are
 // returned in the same "wall-clock-UTC" Eastern-time convention used by the
 // tide data — see the doc comment at the top of tideUtils.ts.
-//
-// Hard-coded for the trip's EDT date range (May 17–24, 2026). If the data
-// ever spans the DST boundary, this should switch to a real timezone lookup.
 
+import { STATION } from "../data/tides";
 import { timeOn } from "./tideUtils";
 
 const DEG = Math.PI / 180;
-const EASTERN_OFFSET_HOURS = -4; // EDT (May)
 
 function toJulianDay(year: number, month: number, day: number): number {
   const a = Math.floor((14 - month) / 12);
@@ -25,11 +22,31 @@ function toJulianDay(year: number, month: number, day: number): number {
   );
 }
 
-/** Sunrise / sunset for a "YYYY-MM-DD" date at Kiawah, as wall-clock-UTC Dates. */
+const OFFSET_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: STATION.timeZone,
+  timeZoneName: "shortOffset",
+  hour: "numeric",
+});
+
+/** UTC offset in hours for the station on the given date (handles DST). */
+function easternOffsetHours(dateISO: string): number {
+  const probe = new Date(dateISO + "T12:00:00Z");
+  const part = OFFSET_FORMAT.formatToParts(probe).find(
+    (p) => p.type === "timeZoneName",
+  );
+  if (!part) return -5;
+  const m = /GMT([+-]?\d+)(?::(\d+))?/.exec(part.value);
+  if (!m) return -5;
+  const hours = Number(m[1]);
+  const mins = m[2] ? Number(m[2]) / 60 : 0;
+  return hours >= 0 ? hours + mins : hours - mins;
+}
+
+/** Sunrise / sunset for a "YYYY-MM-DD" date at the station, as wall-clock-UTC Dates. */
 export function sunTimes(dateISO: string): { sunrise: Date; sunset: Date } {
   const [y, m, d] = dateISO.split("-").map(Number);
-  const lat = 32.6;
-  const lon = -80.05;
+  const lat = STATION.lat;
+  const lon = STATION.lon;
 
   const jd = toJulianDay(y, m ?? 1, d ?? 1) - 2451545.0 + 0.0008;
   const n = jd - lon / 360;
@@ -50,15 +67,19 @@ export function sunTimes(dateISO: string): { sunrise: Date; sunset: Date } {
   const utcRise = new Date((Jtransit - H / 360 - 2440587.5) * 86400000);
   const utcSet = new Date((Jtransit + H / 360 - 2440587.5) * 86400000);
 
+  const offset = easternOffsetHours(dateISO);
+
   return {
-    sunrise: utcToEastern(utcRise, dateISO),
-    sunset: utcToEastern(utcSet, dateISO),
+    sunrise: utcToEastern(utcRise, dateISO, offset),
+    sunset: utcToEastern(utcSet, dateISO, offset),
   };
 }
 
-function utcToEastern(utc: Date, dateISO: string): Date {
-  const hh = (utc.getUTCHours() + EASTERN_OFFSET_HOURS + 24) % 24;
-  const mm = utc.getUTCMinutes();
+function utcToEastern(utc: Date, dateISO: string, offsetHours: number): Date {
+  const totalMin = utc.getUTCHours() * 60 + utc.getUTCMinutes() + offsetHours * 60;
+  const wrapped = ((totalMin % 1440) + 1440) % 1440;
+  const hh = Math.floor(wrapped / 60);
+  const mm = Math.round(wrapped % 60);
   return timeOn(
     dateISO,
     `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`,
