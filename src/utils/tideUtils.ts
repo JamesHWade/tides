@@ -1,5 +1,86 @@
 import type { DayPlan, TideEvent } from "../data/tides";
 
+export type TidePoint = { time: Date; heightFt: number; type: "High" | "Low" };
+
+/** Flatten all tide events across the trip into a sorted timeline. */
+export function flattenTides(days: DayPlan[]): TidePoint[] {
+  const all: TidePoint[] = [];
+  for (const day of days) {
+    for (const t of day.tides) {
+      all.push({ time: timeOn(day.date, t.time), heightFt: t.heightFt, type: t.type });
+    }
+  }
+  all.sort((a, b) => a.time.getTime() - b.time.getTime());
+  return all;
+}
+
+/**
+ * Smoothly interpolate tide height between consecutive extrema using a
+ * cosine (half-wave) curve — a good approximation of the real semidiurnal
+ * pattern between a marked high and low.
+ */
+export function interpolateHeight(timeline: TidePoint[], at: Date): number | null {
+  if (timeline.length === 0) return null;
+  const t = at.getTime();
+  if (t <= timeline[0].time.getTime()) return timeline[0].heightFt;
+  if (t >= timeline[timeline.length - 1].time.getTime()) {
+    return timeline[timeline.length - 1].heightFt;
+  }
+  for (let i = 0; i < timeline.length - 1; i++) {
+    const a = timeline[i];
+    const b = timeline[i + 1];
+    const ta = a.time.getTime();
+    const tb = b.time.getTime();
+    if (t >= ta && t <= tb) {
+      const frac = (t - ta) / (tb - ta);
+      // Half cosine: smooth at both endpoints.
+      const eased = (1 - Math.cos(frac * Math.PI)) / 2;
+      return a.heightFt + (b.heightFt - a.heightFt) * eased;
+    }
+  }
+  return null;
+}
+
+export type TideState = {
+  heightFt: number;
+  direction: "rising" | "falling";
+  next: TidePoint;
+  prev: TidePoint;
+};
+
+/** Current interpolated height + the next high/low. Returns null outside the trip. */
+export function currentTideState(timeline: TidePoint[], at: Date): TideState | null {
+  if (timeline.length < 2) return null;
+  const t = at.getTime();
+  if (t < timeline[0].time.getTime() || t > timeline[timeline.length - 1].time.getTime()) {
+    return null;
+  }
+  for (let i = 0; i < timeline.length - 1; i++) {
+    const a = timeline[i];
+    const b = timeline[i + 1];
+    if (t >= a.time.getTime() && t <= b.time.getTime()) {
+      const h = interpolateHeight(timeline, at) ?? a.heightFt;
+      return {
+        heightFt: h,
+        direction: b.heightFt > a.heightFt ? "rising" : "falling",
+        next: b,
+        prev: a,
+      };
+    }
+  }
+  return null;
+}
+
+export function formatDuration(ms: number): string {
+  const totalMins = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} hr`;
+  return `${h} hr ${m} min`;
+}
+
+
 export type NapSettings = {
   /** 24h "HH:MM" */
   napStart: string;
