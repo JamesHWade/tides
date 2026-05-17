@@ -33,6 +33,10 @@ jobs:
       - name: Fetch NOAA tide predictions
         run: npm run fetch-tides
 
+      - name: Fetch NWS weather forecast
+        run: npm run fetch-weather
+        continue-on-error: true
+
       - name: Build
         run: npm run build
 

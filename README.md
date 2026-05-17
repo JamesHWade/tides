@@ -1,60 +1,98 @@
 # Seabrook + Kiawah Family Tide Planner
 
 A small React + Vite app for planning a family beach week around tides at the
-**Kiawah River Bridge, SC** NOAA station, naps, and possible dolphin
+**Kiawah River Bridge, SC** NOAA station, naps, weather, and dolphin
 strand‑feeding observation windows.
 
-Trip range: **May 17 – May 24, 2026** (Sunday → Sunday).
+Default trip range: **May 17 – May 24, 2026** (Sunday → Sunday). The date
+picker accepts any range up to 21 days; tides and forecast are fetched on
+demand.
 
 ## What it does
 
-For each day in the trip it shows:
+For each day in the chosen range it shows:
 
 - High and low tide events (time + height)
-- A simple horizontal tide timeline with the nap window shaded in
+- A per‑day tide curve rendered with **Observable Plot** (daylight band, nap
+  shading, "now" indicator)
 - A derived **best low‑tide play window** (±90 min around each low)
-- A conservative **possible strand‑feeding watch window** with safety reminders
-- A **nap conflict** badge when a recommended window overlaps the configured nap
+- A **strand‑feeding observation score** (favorable / marginal / unfavorable)
+  that combines tide phase, tidal range, daylight overlap, season, and the
+  forecast wind / precip
+- A **nap conflict** badge when a recommended window overlaps the configured
+  nap
+- The next ~7 days of **NWS weather** (high/low, wind, precip chance) as a
+  per‑day summary
 
-Nap start/end are editable and persist to `localStorage` on the device.
-
-## Tide station
-
-- Station: **Kiawah River Bridge, SC**
-- NOAA station ID: **8667062**
-- Datum: MLLW · Time zone: local (LST/LDT)
-
-Live source:
-<https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=8667062>
+Nap window and chosen date range persist to `localStorage`.
 
 ## Data flow
 
-Tide data is **fetched from NOAA at deploy time** by
-`scripts/fetch-tides.mjs`:
+Two data feeds, both with the same "build‑time snapshot + runtime refresh"
+pattern:
 
 ```
-NOAA datagetter API  ──►  scripts/fetch-tides.mjs  ──►  src/data/tides.generated.ts  ──►  vite build  ──►  GitHub Pages
+NOAA datagetter  ──►  scripts/fetch-tides.mjs    ──►  src/data/tides.generated.ts
+NWS api.weather.gov ─►  scripts/fetch-weather.mjs ──►  src/data/weather.generated.ts
+                                                            │
+                                              vite build ◄──┘
+                                                            │
+                                              GitHub Pages ◄┘
 ```
 
-The generated module is imported by `src/data/tides.ts`. When it contains
-events, the app uses them and `DATA_VERIFIED` flips to `true` (the UI banner
-disappears and the footer prints the fetch timestamp). When it's empty
-(stub state), the app falls back to a committed placeholder pattern so local
-dev still renders without network.
+At runtime the app:
+
+- Uses the snapshot when the requested date is in it (offline‑safe, instant).
+- Otherwise fetches from NOAA / NWS in the browser
+  (`src/utils/runtime{Tides,Weather}.ts`).
+- Falls back to a committed placeholder pattern for the default trip dates so
+  local dev works without network.
 
 To refresh locally:
 
 ```bash
-npm run fetch-tides   # rewrites src/data/tides.generated.ts
+npm run fetch-tides     # rewrites src/data/tides.generated.ts
+npm run fetch-weather   # rewrites src/data/weather.generated.ts (best‑effort)
+npm run fetch-data      # both
 npm run dev
 ```
 
-In CI, the workflow runs `npm run fetch-tides` before `vite build`, so every
-deploy carries fresh predictions.
+CI runs both fetches before `vite build`; the weather step is allowed to
+fail (NWS occasionally rate‑limits) without breaking the deploy.
 
-To change the station or date range, edit the constants at the top of
-`scripts/fetch-tides.mjs` and the matching `STATION` / `TRIP_RANGE` in
-`src/data/tides.ts`.
+## Tide station / weather point
+
+- Tides: **Kiawah River Bridge, SC** — NOAA station **8667062**, MLLW.
+- Weather: NWS gridpoint for the station coordinates (Charleston CHS office).
+
+Sources:
+<https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=8667062>
+<https://www.weather.gov/chs/>
+
+To change the station or default trip range, edit `STATION` / `TRIP_RANGE` in
+`src/data/tides.ts` and the matching constants at the top of
+`scripts/fetch-tides.mjs` and `scripts/fetch-weather.mjs`.
+
+## Strand‑feeding scoring
+
+The per‑day score is computed in `src/utils/strandScore.ts`. Biology comes
+from peer‑reviewed and outreach sources (Petricig 1995, Duffy‑Echevarria
+2008, NOAA Fisheries, Lowcountry Marine Mammal Network); wind and precip
+inputs are observer‑comfort heuristics, not biology, and the UI labels them
+as such. Key encoded rules:
+
+- Best window: low tide ±2 hours, restricted to daylight.
+- Tidal range / minimum low height proxies for mud‑bank exposure (spring
+  tides are weighted up).
+- Season bonus: Sep–Nov peak (fall mullet outmigration), May–Aug solid,
+  Jan–Feb dampened.
+- Wind ≥20 mph or heavy precip drops the score; thunderstorms drop it
+  further.
+
+Observation distances surfaced in the app match NOAA Fisheries / LMMN
+guidance: **15 yards (45 ft) on land, 50 yards (150 ft) from a vessel**.
+Harassment of marine mammals is a federal offense under the MMPA — penalties
+up to $100,000 and one year in jail per violation.
 
 ## Run locally
 
@@ -74,26 +112,18 @@ npm run preview   # optional smoke test of the production bundle
 
 ## Deploy
 
-This repo includes a GitHub Actions workflow at
-`.github/workflows/deploy.yml` that builds and publishes to GitHub Pages on
-every push to `main`.
+`.github/workflows/deploy.yml` builds and publishes to GitHub Pages on every
+push to `main`.
 
 To enable it:
 
 1. In the GitHub repo settings, set **Pages → Source** to **GitHub Actions**.
-2. If the repo name is something other than `tides`, update the `base` in
-   `vite.config.ts` (or set `VITE_BASE=/your-repo-name/` in CI) so asset URLs
-   resolve under `https://<user>.github.io/<repo>/`.
+2. If the repo name is something other than `tides`, set the `base` in
+   `vite.config.ts` (or `VITE_BASE=/your-repo-name/` in CI) so assets resolve
+   under `https://<user>.github.io/<repo>/`.
 3. Push to `main`. The `deploy` job will publish `dist/` to Pages.
 
-For a user/organization root page (`https://<user>.github.io/`), set
-`base: "/"`.
-
-## Updating tide data
-
-Edit `src/data/tides.ts`. Each day is one object in the `tideDays` array with
-an ordered list of `TideEvent`s. Helper `t(time, displayTime, type, heightFt)`
-keeps entries terse.
+For a user/organization root page, set `base: "/"`.
 
 ## Project layout
 
@@ -102,44 +132,51 @@ src/
   App.tsx
   main.tsx
   styles.css
-  data/tides.ts             # station info + week of events
-  utils/tideUtils.ts        # window derivation, nap conflict, formatting
+  data/
+    tides.ts                # types, default trip, snapshot + placeholder
+    tides.generated.ts      # CI‑written NOAA snapshot
+    weather.ts              # weather snapshot adapter
+    weather.generated.ts    # CI‑written NWS snapshot
+  hooks/
+    useDateRange.ts         # picker state + localStorage
+    useTideDays.ts          # snapshot + runtime fetch merge
+    useWeather.ts           # snapshot + live refresh
+  utils/
+    tideUtils.ts            # interpolation, windows, nap conflict
+    sunTimes.ts              # sunrise/sunset, DST‑aware
+    runtimeTides.ts          # browser NOAA fetch
+    runtimeWeather.ts        # browser NWS fetch + aggregation
+    strandScore.ts           # per‑day scoring
   components/
     Header.tsx
-    DayCard.tsx
-    TideTimeline.tsx
+    TripStatus.tsx
+    DateRangePicker.tsx
+    WeekOverview.tsx
+    DayNav.tsx
     NapSettings.tsx
-    RecommendationBadge.tsx
+    DayCard.tsx
+    TideChart.tsx            # Observable Plot per‑day chart
+    WeatherSummary.tsx
+    StrandScoreCard.tsx
     StrandFeedingPanel.tsx
-    DuckDbWasmNote.tsx
+    RecommendationBadge.tsx
+scripts/
+  fetch-tides.mjs
+  fetch-weather.mjs
+  smoke-test.mjs             # node tsx scripts/smoke-test.mjs
+  screenshot.mjs             # local Playwright capture
 .github/workflows/deploy.yml
 ```
 
 ## Why no DuckDB‑WASM (yet)
 
-This app holds **one week of tide events at a single station** — a few dozen
-rows in a static TypeScript array. Shipping a multi‑megabyte in‑browser SQL
-engine to query that would be the wrong trade.
-
-DuckDB‑WASM becomes interesting if this grows into a beach‑history planner
-with multiple years of predictions, weather, wildlife sightings, and trip
-journals. The architecture is intentionally simple now so that swap is easy
-later: keep `tides.ts` as the data adapter and replace its export with a
-DuckDB query.
-
-## Wildlife ethics
-
-Strand feeding is a rare, wild behavior. The windows surfaced in this app
-are opportunities, not promises. Follow the on‑page guidance:
-
-- Stay back **at least 15 yards (45 ft)** from the waterline when dolphins
-  are nearby.
-- Never approach, follow, touch, or feed dolphins.
-- Keep children quiet and above the wrack line; dogs leashed and back.
-- Follow posted signs and any volunteers from the Lowcountry Marine Mammal
-  Network or local stewards.
+The app still holds a small, bounded set of records per session — a few dozen
+tide events and a 7‑day forecast. Shipping a multi‑megabyte in‑browser SQL
+engine to query that would be the wrong trade. If this grows into a beach
+history with years of predictions, weather, and trip journals, the data
+layer is intentionally adapter‑shaped so swapping in DuckDB later is local.
 
 ## License
 
 Personal/family use. No warranty — verify tides and conditions against
-official NOAA forecasts before making real plans.
+official NOAA / NWS forecasts before making real plans.

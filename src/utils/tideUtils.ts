@@ -195,21 +195,6 @@ export function lowTidePlayWindow(day: DayPlan, low: TideEvent, padMinutes = 90)
   };
 }
 
-/**
- * Wildlife-observation window around a low tide. Strand-feeding activity, when
- * it occurs, tends to cluster around lower water — but it is never guaranteed.
- * Keep this conservative: ±90 minutes.
- */
-export function strandFeedingWatchWindow(day: DayPlan, low: TideEvent, padMinutes = 90): Window {
-  const center = timeOn(day.date, low.time);
-  return {
-    start: addMinutes(center, -padMinutes),
-    end: addMinutes(center, padMinutes),
-    label: "Possible strand-feeding watch window",
-    tide: low,
-  };
-}
-
 export function napInterval(dateISO: string, nap: NapSettings): { start: Date; end: Date } {
   return {
     start: timeOn(dateISO, nap.napStart),

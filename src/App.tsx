@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { DATA_GENERATED_AT, DATA_VERIFIED, STATION, tideDays, TRIP_RANGE } from "./data/tides";
+import { useEffect, useMemo, useState } from "react";
+import { DATA_GENERATED_AT, DATA_VERIFIED, STATION, TRIP_RANGE } from "./data/tides";
 import {
   DEFAULT_NAP,
   type NapSettings,
@@ -13,6 +13,10 @@ import { StrandFeedingPanel } from "./components/StrandFeedingPanel";
 import { WeekOverview } from "./components/WeekOverview";
 import { TripStatus } from "./components/TripStatus";
 import { DayNav } from "./components/DayNav";
+import { DateRangePicker } from "./components/DateRangePicker";
+import { useDateRange } from "./hooks/useDateRange";
+import { useTideDays } from "./hooks/useTideDays";
+import { useWeather } from "./hooks/useWeather";
 
 const NAP_STORAGE_KEY = "tides.nap.v1";
 
@@ -30,10 +34,9 @@ function loadNap(): NapSettings {
   }
 }
 
-/** `now` here is an Eastern wall-clock-UTC Date (see tideUtils.ts). */
-function todayInTripISO(now: Date): string | null {
+function dateInRangeISO(now: Date, startISO: string, endISO: string): string | null {
   const iso = dateISOOf(now);
-  if (iso < TRIP_RANGE.startISO || iso > TRIP_RANGE.endISO) return null;
+  if (iso < startISO || iso > endISO) return null;
   return iso;
 }
 
@@ -48,11 +51,40 @@ function scrollToDay(dateISO: string) {
   window.setTimeout(() => el.classList.remove("day-card--flash"), 1200);
 }
 
+function noonUtc(dateISO: string): Date {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 12));
+}
+
+function rangeLabel(startISO: string, endISO: string): string {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+  const yearFmt = new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: "UTC" });
+  const s = noonUtc(startISO);
+  const e = noonUtc(endISO);
+  if (startISO === endISO) return `${fmt.format(s)}, ${yearFmt.format(s)}`;
+  if (s.getUTCFullYear() === e.getUTCFullYear()) {
+    return `${fmt.format(s)} – ${fmt.format(e)}, ${yearFmt.format(s)}`;
+  }
+  return `${fmt.format(s)}, ${yearFmt.format(s)} – ${fmt.format(e)}, ${yearFmt.format(e)}`;
+}
+
 export default function App() {
   const [nap, setNap] = useState<NapSettings>(() => loadNap());
-  // `now` is in the station's local timezone (see tideUtils.ts), so it shares
-  // the same coordinate system as tide/sun times.
   const [now, setNow] = useState<Date>(() => nowInStationTZ());
+  const { range, setRange, resetToTrip } = useDateRange();
+  const {
+    days,
+    status,
+    error,
+    snapshotCoverage,
+    placeholderCoverage,
+    fetchedCoverage,
+  } = useTideDays(range);
+  const weather = useWeather();
 
   useEffect(() => {
     try {
@@ -67,24 +99,54 @@ export default function App() {
     return () => window.clearInterval(id);
   }, []);
 
-  const todayISO = todayInTripISO(now);
+  const todayISO = dateInRangeISO(now, range.startISO, range.endISO);
+  const titleRange = useMemo(
+    () => rangeLabel(range.startISO, range.endISO),
+    [range.startISO, range.endISO],
+  );
+
+  const statusLine: React.ReactNode = (() => {
+    if (status === "loading") return "⏳ Fetching tides…";
+    if (status === "error") return `⚠ ${error ?? "Tide fetch failed"}`;
+    if (placeholderCoverage === 1) {
+      return "⚠ Placeholder pattern only — run `npm run fetch-tides`";
+    }
+    if (snapshotCoverage === 1) return "✓ NOAA snapshot covers this range";
+    if (snapshotCoverage > 0 && fetchedCoverage > 0) {
+      return "✓ Snapshot + live NOAA fetch";
+    }
+    if (placeholderCoverage > 0 && fetchedCoverage > 0) {
+      return "✓ Placeholder + live NOAA fetch";
+    }
+    if (snapshotCoverage > 0) return "✓ NOAA snapshot (partial)";
+    if (fetchedCoverage > 0) return "✓ Live NOAA fetch";
+    return "—";
+  })();
 
   return (
     <div className="app">
-      <Header />
+      <Header range={range} />
 
       <main className="container">
-        <TripStatus days={tideDays} now={now} />
+        <TripStatus days={days} now={now} range={range} />
+
+        <DateRangePicker
+          value={range}
+          isTrip={range.isTrip}
+          onChange={setRange}
+          onReset={resetToTrip}
+          statusLine={statusLine}
+        />
 
         <section className="card overview-card" aria-labelledby="overview-heading">
           <div className="card-head">
-            <h2 id="overview-heading">The whole week at a glance</h2>
+            <h2 id="overview-heading">The whole range at a glance</h2>
             <p className="card-sub">
               Tap a day to jump to its details. Dark dots = highs, gold dots = lows.
               Gold band = daylight; pink dot = right now.
             </p>
           </div>
-          <WeekOverview days={tideDays} now={now} onDayClick={scrollToDay} />
+          <WeekOverview days={days} now={now} onDayClick={scrollToDay} />
           <div className="overview-legend" aria-hidden="true">
             <span className="legend-swatch legend-water" /> Water level
             <span className="legend-swatch legend-day" /> Daylight
@@ -94,21 +156,22 @@ export default function App() {
           </div>
         </section>
 
-        <DayNav days={tideDays} todayISO={todayISO} />
+        <DayNav days={days} todayISO={todayISO} />
 
         <NapSettingsCard value={nap} onChange={setNap} />
 
         <section aria-labelledby="days-heading">
           <h2 id="days-heading" className="section-title">
-            Daily tide plan · {TRIP_RANGE.label}
+            Daily tide plan · {titleRange}
           </h2>
           <div className="day-grid">
-            {tideDays.map((day) => (
+            {days.map((day) => (
               <DayCard
                 key={day.date}
                 day={day}
-                allDays={tideDays}
+                allDays={days}
                 nap={nap}
+                weather={weather.byDate.get(day.date)}
                 now={now}
                 isToday={day.date === todayISO}
               />
@@ -130,9 +193,38 @@ export default function App() {
             </a>
             ), datum {STATION.datum}.
           </p>
-          {DATA_VERIFIED && DATA_GENERATED_AT && (
+          <p className="muted">
+            Forecast:{" "}
+            <a href="https://www.weather.gov/chs/" target="_blank" rel="noreferrer">
+              NOAA / NWS Charleston
+            </a>
+            {weather.liveAt && (
+              <>
+                {" · refreshed "}
+                <time dateTime={weather.liveAt}>
+                  {new Date(weather.liveAt).toLocaleTimeString()}
+                </time>
+              </>
+            )}
+            {!weather.liveAt && weather.snapshotAt && (
+              <>
+                {" · snapshot "}
+                <time dateTime={weather.snapshotAt}>
+                  {new Date(weather.snapshotAt).toLocaleString()}
+                </time>
+              </>
+            )}
+            {weather.status === "stale" && (
+              <> · ⚠ live refresh failed, showing cached forecast</>
+            )}
+            {weather.status === "error" && (
+              <> · ⚠ forecast unavailable</>
+            )}
+            .
+          </p>
+          {DATA_VERIFIED && DATA_GENERATED_AT && range.isTrip && (
             <p className="muted">
-              Predictions fetched from NOAA on{" "}
+              Trip tides snapshot fetched from NOAA on{" "}
               <time dateTime={DATA_GENERATED_AT}>
                 {new Date(DATA_GENERATED_AT).toLocaleString()}
               </time>
@@ -140,8 +232,8 @@ export default function App() {
             </p>
           )}
           <p className="muted">
-            Built for a family beach week. Not a substitute for posted local
-            guidance, lifeguards, or NOAA marine forecasts.
+            Built for a family beach week. Default trip range: {TRIP_RANGE.label}. Not a
+            substitute for posted local guidance, lifeguards, or NOAA marine forecasts.
           </p>
         </footer>
       </main>

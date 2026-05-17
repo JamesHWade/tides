@@ -1,6 +1,11 @@
-import { STATION, TRIP_RANGE, DATA_VERIFIED } from "../data/tides";
+import { STATION, TRIP_RANGE, DATA_VERIFIED, type DateRange } from "../data/tides";
 
-export function Header() {
+type Props = {
+  range?: DateRange & { isTrip?: boolean };
+};
+
+export function Header({ range }: Props = {}) {
+  const showingTrip = range == null || range.isTrip !== false;
   return (
     <header className="hero" aria-label="Family Tide Planner">
       <div className="hero-bg" aria-hidden="true">
@@ -30,7 +35,7 @@ export function Header() {
         <p className="eyebrow">Family Tide Planner</p>
         <h1>Seabrook + Kiawah Beach Week</h1>
         <p className="subtitle">
-          {TRIP_RANGE.label} · tides from {STATION.name}
+          {showingTrip ? TRIP_RANGE.label : "Custom dates"} · tides from {STATION.name}
         </p>
         <p className="hero-note">
           Times are predictions at the Kiawah River Bridge station. Open-beach

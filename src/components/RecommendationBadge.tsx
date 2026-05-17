@@ -1,4 +1,4 @@
-type Variant = "play" | "watch" | "conflict" | "calm" | "info";
+type Variant = "play" | "conflict" | "calm" | "info";
 
 type Props = {
   variant: Variant;
@@ -7,7 +7,6 @@ type Props = {
 
 const VARIANT_LABEL: Record<Variant, string> = {
   play: "Recommended",
-  watch: "Watch",
   conflict: "Warning",
   calm: "Calm",
   info: "Info",
