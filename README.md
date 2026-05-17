@@ -27,24 +27,34 @@ Nap start/end are editable and persist to `localStorage` on the device.
 Live source:
 <https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=8667062>
 
-## ⚠️ Data verification
+## Data flow
 
-The tide values currently committed in `src/data/tides.ts` are **estimated
-placeholders** — plausible semidiurnal values for the new‑moon spring tides
-of mid‑May 2026, but **not** pulled from NOAA. The build environment that
-generated this scaffold had no network access to `tidesandcurrents.noaa.gov`.
+Tide data is **fetched from NOAA at deploy time** by
+`scripts/fetch-tides.mjs`:
 
-Before relying on this app for real beach planning:
+```
+NOAA datagetter API  ──►  scripts/fetch-tides.mjs  ──►  src/data/tides.generated.ts  ──►  vite build  ──►  GitHub Pages
+```
 
-1. Open the NOAA predictions page for station 8667062, set the date range to
-   2026‑05‑17 → 2026‑05‑24, and select the **High/Low** interval.
-2. Copy the times (12‑hour) and heights (feet, MLLW) into the matching entries
-   in `src/data/tides.ts`.
-3. Flip `DATA_VERIFIED` to `true` in that file. The warning banner in the UI
-   will disappear automatically.
+The generated module is imported by `src/data/tides.ts`. When it contains
+events, the app uses them and `DATA_VERIFIED` flips to `true` (the UI banner
+disappears and the footer prints the fetch timestamp). When it's empty
+(stub state), the app falls back to a committed placeholder pattern so local
+dev still renders without network.
 
-The `TideEvent` shape (`time`, `displayTime`, `type`, `heightFt`) is
-deliberately close to NOAA's `hilo` interval output for easy copy/paste.
+To refresh locally:
+
+```bash
+npm run fetch-tides   # rewrites src/data/tides.generated.ts
+npm run dev
+```
+
+In CI, the workflow runs `npm run fetch-tides` before `vite build`, so every
+deploy carries fresh predictions.
+
+To change the station or date range, edit the constants at the top of
+`scripts/fetch-tides.mjs` and the matching `STATION` / `TRIP_RANGE` in
+`src/data/tides.ts`.
 
 ## Run locally
 

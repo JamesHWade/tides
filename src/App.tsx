@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { STATION, tideDays, TRIP_RANGE } from "./data/tides";
+import { DATA_GENERATED_AT, DATA_VERIFIED, STATION, tideDays, TRIP_RANGE } from "./data/tides";
 import { DEFAULT_NAP, type NapSettings } from "./utils/tideUtils";
 import { Header } from "./components/Header";
 import { NapSettingsCard } from "./components/NapSettings";
@@ -67,6 +67,15 @@ export default function App() {
             </a>
             ), datum {STATION.datum}.
           </p>
+          {DATA_VERIFIED && DATA_GENERATED_AT && (
+            <p className="muted">
+              Predictions fetched from NOAA on{" "}
+              <time dateTime={DATA_GENERATED_AT}>
+                {new Date(DATA_GENERATED_AT).toLocaleString()}
+              </time>
+              .
+            </p>
+          )}
           <p className="muted">
             Built for a family beach week. Not a substitute for posted local
             guidance, lifeguards, or NOAA marine forecasts.

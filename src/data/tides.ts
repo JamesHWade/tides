@@ -1,17 +1,13 @@
 // Kiawah River Bridge, SC — NOAA tide station 8667062
 // Trip range: Sunday, May 17, 2026 → Sunday, May 24, 2026
 //
-// IMPORTANT: The tide times and heights below are PLACEHOLDER values modeled on
-// a typical semidiurnal pattern near the May 16, 2026 new moon (spring tides
-// of roughly 6 ft range, each cycle advancing ~50 min/day). They were NOT
-// pulled from NOAA in this build because the build environment had no network
-// access to tidesandcurrents.noaa.gov.
-//
-// Before relying on this app for real beach planning, replace these entries
-// with verified predictions from:
-//   https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=8667062
-// The TideEvent shape below matches the NOAA "hilo" interval response, so a
-// copy/paste from the NOAA table is straightforward.
+// At deploy time, scripts/fetch-tides.mjs pulls real NOAA predictions and
+// writes them to ./tides.generated.ts. When that file is non-empty we use
+// it and surface DATA_VERIFIED = true; otherwise we fall back to the
+// placeholder semidiurnal pattern below so local dev and offline previews
+// still render. Regenerate locally with `npm run fetch-tides`.
+
+import { GENERATED_AT, generatedTideDays } from "./tides.generated";
 
 export type TideType = "High" | "Low";
 
@@ -48,9 +44,6 @@ export const TRIP_RANGE = {
   label: "May 17–24, 2026",
 };
 
-/** Data verification status surfaced in the UI. Flip to true once NOAA values are pasted in. */
-export const DATA_VERIFIED = false;
-
 const t = (time: string, displayTime: string, type: TideType, heightFt: number): TideEvent => ({
   time,
   displayTime,
@@ -58,7 +51,11 @@ const t = (time: string, displayTime: string, type: TideType, heightFt: number):
   heightFt,
 });
 
-export const tideDays: DayPlan[] = [
+/**
+ * Placeholder pattern — plausible semidiurnal values near the May 16, 2026
+ * new moon spring tides, used only when tides.generated.ts is empty.
+ */
+const PLACEHOLDER_TIDE_DAYS: DayPlan[] = [
   {
     date: "2026-05-17",
     label: "Sunday, May 17",
@@ -141,3 +138,7 @@ export const tideDays: DayPlan[] = [
     notes: ["Travel / departure day."],
   },
 ];
+
+export const DATA_VERIFIED: boolean = generatedTideDays.length > 0;
+export const tideDays: DayPlan[] = DATA_VERIFIED ? generatedTideDays : PLACEHOLDER_TIDE_DAYS;
+export const DATA_GENERATED_AT: string | null = GENERATED_AT;
