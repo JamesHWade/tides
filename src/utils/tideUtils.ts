@@ -188,8 +188,21 @@ export type Window = {
  * When `daylight` is supplied, the window is clipped to between sunrise and
  * sunset. A low tide whose entire ±pad window falls outside daylight (a 3 AM
  * low, say) returns null — recommending a "beach play" window in the dark is
- * never useful for the families this app is built for.
+ * never useful for the families this app is built for. Without `daylight`
+ * the function always returns a Window, preserving the original signature
+ * for callers that don't care about night/day.
  */
+export function lowTidePlayWindow(
+  day: DayPlan,
+  low: TideEvent,
+  padMinutes?: number,
+): Window;
+export function lowTidePlayWindow(
+  day: DayPlan,
+  low: TideEvent,
+  padMinutes: number,
+  daylight: { sunrise: Date; sunset: Date },
+): Window | null;
 export function lowTidePlayWindow(
   day: DayPlan,
   low: TideEvent,
@@ -245,7 +258,10 @@ export function bestDailyRecommendation(
   }
 
   const windows = lows
-    .map((l) => ({ low: l, win: lowTidePlayWindow(day, l, 90, daylight) }))
+    .map((l) => ({
+      low: l,
+      win: daylight ? lowTidePlayWindow(day, l, 90, daylight) : lowTidePlayWindow(day, l, 90),
+    }))
     .filter((x): x is { low: TideEvent; win: Window } => x.win != null);
 
   if (windows.length === 0) {

@@ -174,6 +174,29 @@ assert.equal(
   "clipped window must start at sunrise",
 );
 
+// Sunset-straddling low → window clipped to end at sunset. May 17 sunset is
+// around 8:15 PM, so a 7:30 PM low's ±90 min window (6:00 – 9:00 PM) must
+// have its tail trimmed to sunset.
+const sunsetLow = { time: "19:30", displayTime: "7:30 PM", type: "Low", heightFt: 0.3 };
+const sunsetStub = { date: "2026-05-17", label: "Sunday, May 17", tides: [sunsetLow] };
+const sunsetClipped = lowTidePlayWindow(sunsetStub, sunsetLow, 90, may17Sun);
+assert.ok(sunsetClipped, "sunset-overlapping low should produce a (clipped) window");
+assert.equal(
+  sunsetClipped.end.getTime(),
+  may17Sun.sunset.getTime(),
+  "clipped window must end at sunset",
+);
+assert.ok(
+  sunsetClipped.start.getTime() < may17Sun.sunset.getTime(),
+  "clipped window start must remain before sunset",
+);
+
+// Low entirely after sunset → no window at all.
+const afterSunsetLow = { time: "22:00", displayTime: "10:00 PM", type: "Low", heightFt: 0.4 };
+const afterSunsetStub = { date: "2026-05-17", label: "Sunday, May 17", tides: [afterSunsetLow] };
+const afterSunsetWindow = lowTidePlayWindow(afterSunsetStub, afterSunsetLow, 90, may17Sun);
+assert.equal(afterSunsetWindow, null, "post-sunset low should not produce a play window");
+
 // Recommendation copy must not promise "morning beach play" for an all-night low.
 const onlyNightDay = { date: "2026-05-17", label: "Sunday, May 17", tides: [nightLow] };
 const recNight = bestDailyRecommendation(
