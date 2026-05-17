@@ -30,14 +30,16 @@ export function DayCard({ day, allDays, nap, weather, now, isToday }: Props) {
   const highs = day.tides.filter((t) => t.type === "High");
   const napRange = napInterval(day.date, nap);
 
-  const playWindows = lows.map((l) => lowTidePlayWindow(day, l));
-  const recommendation = bestDailyRecommendation(day, nap);
+  const sun = sunTimes(day.date);
+  const playWindows = lows
+    .map((l) => lowTidePlayWindow(day, l, 90, sun))
+    .filter((w): w is NonNullable<typeof w> => w != null);
+  const recommendation = bestDailyRecommendation(day, nap, sun);
 
   const anyConflict = playWindows.some((w) => conflictsWithNap(w, napRange));
   const allConflict =
     playWindows.length > 0 && playWindows.every((w) => conflictsWithNap(w, napRange));
 
-  const sun = sunTimes(day.date);
   const strand = scoreStrandDay(day, weather);
 
   return (
@@ -70,7 +72,11 @@ export function DayCard({ day, allDays, nap, weather, now, isToday }: Props) {
 
         <p className="day-recommendation">{recommendation}</p>
         <div className="badge-row">
-          {allConflict ? (
+          {lows.length === 0 ? (
+            <RecommendationBadge variant="info">No low tide today</RecommendationBadge>
+          ) : playWindows.length === 0 ? (
+            <RecommendationBadge variant="info">All lows outside daylight</RecommendationBadge>
+          ) : allConflict ? (
             <RecommendationBadge variant="conflict">Nap conflict today</RecommendationBadge>
           ) : anyConflict ? (
             <RecommendationBadge variant="info">Partial nap overlap</RecommendationBadge>

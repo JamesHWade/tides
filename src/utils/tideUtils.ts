@@ -184,12 +184,29 @@ export type Window = {
 /**
  * Beach play window centered on a low tide. Defaults to ±90 min, since lower
  * water often exposes more flat sand and shallow pools for kids.
+ *
+ * When `daylight` is supplied, the window is clipped to between sunrise and
+ * sunset. A low tide whose entire ±pad window falls outside daylight (a 3 AM
+ * low, say) returns null — recommending a "beach play" window in the dark is
+ * never useful for the families this app is built for.
  */
-export function lowTidePlayWindow(day: DayPlan, low: TideEvent, padMinutes = 90): Window {
+export function lowTidePlayWindow(
+  day: DayPlan,
+  low: TideEvent,
+  padMinutes = 90,
+  daylight?: { sunrise: Date; sunset: Date },
+): Window | null {
   const center = timeOn(day.date, low.time);
+  let start = addMinutes(center, -padMinutes);
+  let end = addMinutes(center, padMinutes);
+  if (daylight) {
+    if (end <= daylight.sunrise || start >= daylight.sunset) return null;
+    if (start < daylight.sunrise) start = daylight.sunrise;
+    if (end > daylight.sunset) end = daylight.sunset;
+  }
   return {
-    start: addMinutes(center, -padMinutes),
-    end: addMinutes(center, padMinutes),
+    start,
+    end,
     label: "Best low-tide play window",
     tide: low,
   };
@@ -212,26 +229,41 @@ export function formatWindow(w: Window): string {
 
 /**
  * Pick the best single recommendation copy for the day based on tide events
- * and the nap interval.
+ * and the nap interval. When `daylight` is provided, nighttime lows are
+ * excluded — we don't want to suggest a 3 AM beach trip just because the
+ * tide is low.
  */
-export function bestDailyRecommendation(day: DayPlan, nap: NapSettings): string {
+export function bestDailyRecommendation(
+  day: DayPlan,
+  nap: NapSettings,
+  daylight?: { sunrise: Date; sunset: Date },
+): string {
   const naps = napInterval(day.date, nap);
   const lows = day.tides.filter((t) => t.type === "Low");
   if (lows.length === 0) {
     return "No low tide today at this station — plan around the high tides and use a quieter beach access.";
   }
 
-  const windows = lows.map((l) => ({ low: l, win: lowTidePlayWindow(day, l) }));
+  const windows = lows
+    .map((l) => ({ low: l, win: lowTidePlayWindow(day, l, 90, daylight) }))
+    .filter((x): x is { low: TideEvent; win: Window } => x.win != null);
+
+  if (windows.length === 0) {
+    return "All low tides today fall outside daylight — plan a high-tide swim or sand-castle session instead.";
+  }
+
   const nonConflicting = windows.filter(({ win }) => !conflictsWithNap(win, naps));
 
   if (nonConflicting.length > 0) {
-    // Prefer the earliest non-conflicting window, then a morning/afternoon hint.
+    // Prefer the earliest non-conflicting window, then a time-of-day hint
+    // keyed off the (possibly clipped) window start so a sunrise-clipped
+    // window still reads as "morning".
     const pick = nonConflicting.sort((a, b) => a.win.start.getTime() - b.win.start.getTime())[0];
-    const hour = pick.low.time.split(":").map(Number)[0] ?? 0;
+    const hour = pick.win.start.getUTCHours();
     if (hour < 11) return "Best with kids: morning beach play before nap.";
     if (hour < 17) return "Great low-tide window this afternoon after naps.";
-    return "Late low tide — perfect for an after-dinner shell walk.";
+    return "Late afternoon low — good for a pre-dinner shell walk.";
   }
 
-  return "All low tides overlap nap today — consider a short morning beach visit and a later shell walk.";
+  return "All daylight low tides overlap nap today — consider a short morning beach visit or a late-afternoon shell walk.";
 }
