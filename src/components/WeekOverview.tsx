@@ -107,11 +107,8 @@ export function WeekOverview({ days, now, onDayClick }: Props) {
         {/* Daylight tints, one per day */}
         {days.map((d) => {
           const sun = sunTimes(d.date);
-          const dayStart = timeOn(d.date, "00:00");
-          const dayStartPct = xPct(dayStart);
-          const dayWidthPct = (86400000 / span) * 100;
-          const left = dayStartPct + (sun.sunriseHours / 24) * dayWidthPct;
-          const right = dayStartPct + (sun.sunsetHours / 24) * dayWidthPct;
+          const left = xPct(sun.sunrise);
+          const right = xPct(sun.sunset);
           if (right <= left) return null;
           return (
             <div

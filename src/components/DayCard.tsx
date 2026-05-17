@@ -2,6 +2,7 @@ import type { DayPlan } from "../data/tides";
 import {
   bestDailyRecommendation,
   conflictsWithNap,
+  formatClock,
   formatWindow,
   lowTidePlayWindow,
   napInterval,
@@ -50,7 +51,7 @@ export function DayCard({ day, allDays, nap, now, isToday }: Props) {
           <div className="day-head__sun" title="Daylight">
             <span aria-hidden="true">☀</span>
             <span>
-              {sun.sunriseLabel} – {sun.sunsetLabel}
+              {formatClock(sun.sunrise)} – {formatClock(sun.sunset)}
             </span>
           </div>
         </div>

@@ -1,6 +1,71 @@
-import type { DayPlan, TideEvent } from "../data/tides";
+import { STATION, type DayPlan, type TideEvent } from "../data/tides";
 
 export type TidePoint = { time: Date; heightFt: number; type: "High" | "Low" };
+
+/**
+ * Time-handling convention used across the app
+ * ----------------------------------------------
+ * Tide data, sun times, and the "now" indicator all live in
+ * STATION.timeZone (America/New_York). We represent every such moment as a
+ * "wall-clock-UTC" Date — a Date whose `getUTC*` fields hold the Eastern
+ * wall-clock components. Comparing two such Dates with `getTime()` gives
+ * the correct elapsed duration as long as both use the convention.
+ *
+ * Use `timeOn(dateISO, hhmm)` to build a tide/sun moment, and
+ * `nowInStationTZ(realNow)` to convert the viewer's wall-clock `new Date()`
+ * to the same convention. Format with `formatClock`, which reads UTC fields.
+ *
+ * Note: tide data is documented as local Eastern; the viewer's browser
+ * timezone is irrelevant to the visualization.
+ */
+
+/** Build a "wall-clock-UTC" Date from an ISO date + 24h HH:MM. */
+export function timeOn(dateISO: string, hhmm: string): Date {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const [hh, mm] = hhmm.split(":").map(Number);
+  return new Date(
+    Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0),
+  );
+}
+
+const STATION_TZ_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: STATION.timeZone,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+/**
+ * Convert a real UTC moment (e.g. `new Date()`) to the wall-clock-UTC
+ * convention by reading the station's local-time components.
+ */
+export function nowInStationTZ(realNow: Date = new Date()): Date {
+  const parts = Object.fromEntries(
+    STATION_TZ_FORMATTER.formatToParts(realNow).map((p) => [p.type, p.value]),
+  );
+  return new Date(
+    Date.UTC(
+      parseInt(parts.year, 10),
+      parseInt(parts.month, 10) - 1,
+      parseInt(parts.day, 10),
+      parseInt(parts.hour, 10) % 24,
+      parseInt(parts.minute, 10),
+      parseInt(parts.second, 10),
+    ),
+  );
+}
+
+/** Pull `YYYY-MM-DD` from a wall-clock-UTC Date. */
+export function dateISOOf(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
 
 /** Flatten all tide events across the trip into a sorted timeline. */
 export function flattenTides(days: DayPlan[]): TidePoint[] {
@@ -90,17 +155,10 @@ export type NapSettings = {
 
 export const DEFAULT_NAP: NapSettings = { napStart: "13:00", napEnd: "15:00" };
 
-/** Build a Date for a "HH:MM" 24h time on a given ISO date (local time). */
-export function timeOn(dateISO: string, hhmm: string): Date {
-  const [y, m, d] = dateISO.split("-").map(Number);
-  const [hh, mm] = hhmm.split(":").map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
-}
-
-/** Format a Date as 12-hour AM/PM. */
+/** Format a wall-clock-UTC Date as 12-hour AM/PM (reads UTC fields). */
 export function formatClock(d: Date): string {
-  let h = d.getHours();
-  const m = d.getMinutes();
+  let h = d.getUTCHours();
+  const m = d.getUTCMinutes();
   const ampm = h >= 12 ? "PM" : "AM";
   h = h % 12;
   if (h === 0) h = 12;

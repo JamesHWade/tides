@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import type { DayPlan } from "../data/tides";
 import { TRIP_RANGE } from "../data/tides";
 import {
@@ -11,36 +10,28 @@ import {
 
 type Props = {
   days: DayPlan[];
+  /** Station-local wall-clock-UTC `now`, owned by App. */
+  now: Date;
 };
 
-function dayNumber(now: Date): number | null {
-  const start = timeOn(TRIP_RANGE.startISO, "00:00");
-  const end = new Date(timeOn(TRIP_RANGE.endISO, "00:00").getTime() + 86400000);
+function dayNumber(now: Date, start: Date, end: Date): number | null {
   if (now.getTime() < start.getTime() || now.getTime() > end.getTime()) return null;
   return Math.floor((now.getTime() - start.getTime()) / 86400000) + 1;
 }
 
-function tripDays(): number {
-  const a = timeOn(TRIP_RANGE.startISO, "00:00").getTime();
-  const b = timeOn(TRIP_RANGE.endISO, "00:00").getTime();
-  return Math.round((b - a) / 86400000) + 1;
+function tripDays(start: Date, end: Date): number {
+  // `end` is the start of the day AFTER the last trip day; subtract one.
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
 }
 
-export function TripStatus({ days }: Props) {
-  const [now, setNow] = useState<Date>(() => new Date());
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
-
+export function TripStatus({ days, now }: Props) {
   const timeline = flattenTides(days);
   const state = currentTideState(timeline, now);
-  const dayN = dayNumber(now);
-  const totalDays = tripDays();
 
   const start = timeOn(TRIP_RANGE.startISO, "00:00");
   const end = new Date(timeOn(TRIP_RANGE.endISO, "00:00").getTime() + 86400000);
+  const dayN = dayNumber(now, start, end);
+  const totalDays = tripDays(start, end);
 
   let phase: "before" | "during" | "after";
   if (now.getTime() < start.getTime()) phase = "before";
@@ -49,6 +40,13 @@ export function TripStatus({ days }: Props) {
 
   const daysUntil = Math.ceil((start.getTime() - now.getTime()) / 86400000);
   const daysSince = Math.floor((now.getTime() - end.getTime()) / 86400000);
+
+  const longDate = `${now.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC", // `now` carries Eastern wall-clock in its UTC fields
+  })}`;
 
   return (
     <section className="trip-status" aria-label="Trip status">
@@ -68,22 +66,25 @@ export function TripStatus({ days }: Props) {
             <strong>
               Day {dayN} of {totalDays}
             </strong>{" "}
-            ·{" "}
-            {now.toLocaleDateString(undefined, {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
+            · {longDate}
           </>
         )}
         {phase === "after" && (
           <>
             <span className="trip-status__pill">Wrapped</span>
-            Trip ended{" "}
-            <strong>
-              {daysSince} {daysSince === 1 ? "day" : "days"}
-            </strong>{" "}
-            ago
+            {daysSince === 0 ? (
+              <>
+                Trip ended <strong>today</strong>
+              </>
+            ) : (
+              <>
+                Trip ended{" "}
+                <strong>
+                  {daysSince} {daysSince === 1 ? "day" : "days"}
+                </strong>{" "}
+                ago
+              </>
+            )}
           </>
         )}
       </div>
