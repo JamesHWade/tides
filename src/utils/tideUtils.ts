@@ -392,7 +392,9 @@ export function bestDailyRecommendation(
   const nearLow = pick.tide != null;
 
   if (!hasDaylightLow) {
-    return "All lows are outside daylight today — water stays on the higher side, but you've got workable beach time between the highs.";
+    return lows.length === 0
+      ? "No low tide today — water stays on the higher side, but you've got workable beach time between the highs."
+      : "All lows are outside daylight today — water stays on the higher side, but you've got workable beach time between the highs.";
   }
 
   if (hour < 11) {

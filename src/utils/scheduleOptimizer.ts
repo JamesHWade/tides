@@ -524,25 +524,36 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
   }
   if (chosenPlay) {
     const low = chosenPlay.anchorLow;
+    const pacedStartMins =
+      chosenPlay.paced.start.getUTCHours() * 60 +
+      chosenPlay.paced.start.getUTCMinutes();
     const lowTimeMins = low
       ? (() => {
           const [h, m] = low.time.split(":").map(Number);
           return (h ?? 0) * 60 + (m ?? 0);
         })()
       : null;
-    const startMins =
-      familyStart.getUTCHours() * 60 + familyStart.getUTCMinutes();
+    // "Early low": the low is before the chosen segment, but specifically
+    // close enough that the after-low side is the segment we picked. We
+    // require the low to be no more than ~2 h before the segment start —
+    // otherwise the segment is on the wrong side of the nap (or the day),
+    // and the "too early, but the sand stays workable" copy would be
+    // misleading.
     const earlyLow =
-      low != null && lowTimeMins != null && lowTimeMins < startMins;
+      low != null &&
+      lowTimeMins != null &&
+      lowTimeMins < pacedStartMins &&
+      pacedStartMins - lowTimeMins <= 120;
     const idSuffix = low ? low.time : chosenPlay.paced.start.toISOString();
     let reason: string;
-    if (earlyLow && low) {
-      reason = `Low was at ${low.displayTime.toLowerCase()} — too early for kids, but you're well clear of high tide for a few hours after.`;
-    } else if (chosenPlay.nearLow && low) {
+    if (chosenPlay.nearLow && low) {
       reason = `Centered on the ${low.displayTime.toLowerCase()} low (${low.heightFt.toFixed(1)} ft). Flat sand and shallow pools.`;
-    } else if (low) {
-      reason = `Tide near the ${low.displayTime.toLowerCase()} low — outside the ±90 min high-tide bands, so the wet-sand strip is workable.`;
+    } else if (earlyLow && low) {
+      reason = `Low was at ${low.displayTime.toLowerCase()} — too early for kids, but you're well clear of high tide for a few hours after.`;
     } else {
+      // Anchor low (if any) is far from the segment — nap or family hours
+      // put it out of reach. Don't mention it; the segment is good for
+      // being away from high tide, not for being near a low.
       reason = "Well away from high tide — the wet-sand strip is workable even without a nearby low.";
     }
     blocks.push({
