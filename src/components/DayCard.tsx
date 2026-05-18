@@ -18,18 +18,29 @@ import { scoreStrandDay } from "../utils/strandScore";
 import { optimizeDaySchedule } from "../utils/scheduleOptimizer";
 import type { DayWeather } from "../utils/runtimeWeather";
 import type { AccessSettings } from "../hooks/useAccessSettings";
+import type { HouseholdPace } from "../hooks/useHouseholdPace";
 
 type Props = {
   day: DayPlan;
   allDays: DayPlan[];
   nap: NapSettings;
+  pace: HouseholdPace;
   weather?: DayWeather;
   access: AccessSettings;
   now?: Date;
   isToday?: boolean;
 };
 
-export function DayCard({ day, allDays, nap, weather, access, now, isToday }: Props) {
+export function DayCard({
+  day,
+  allDays,
+  nap,
+  pace,
+  weather,
+  access,
+  now,
+  isToday,
+}: Props) {
   const lows = day.tides.filter((t) => t.type === "Low");
   const highs = day.tides.filter((t) => t.type === "High");
   const napRange = napInterval(day.date, nap);
@@ -51,6 +62,7 @@ export function DayCard({ day, allDays, nap, weather, access, now, isToday }: Pr
     nap,
     weather,
     access,
+    pace,
     now,
   });
 

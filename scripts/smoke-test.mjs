@@ -619,4 +619,93 @@ assert.ok(validDates.has(bestNoArg.publicOnly.date));
 assert.ok(validDates.has(bestTwoArg.publicOnly.date));
 console.log("✓ pickBestDays");
 
+// --- 8. household pace clips early/late windows ----------------------------
+// Synthetic day with one early-morning low and a high in the afternoon — no
+// late low to be claimed by the strand block, so the play candidate is
+// driven entirely by the 8:00 AM low.
+const earlyLowDay = {
+  date: "2026-05-30",
+  label: "Saturday, May 30",
+  tides: [
+    { time: "01:30", displayTime: "1:30 AM", type: "High", heightFt: 5.0 },
+    { time: "08:00", displayTime: "8:00 AM", type: "Low", heightFt: -0.2 },
+    { time: "14:30", displayTime: "2:30 PM", type: "High", heightFt: 5.2 },
+    { time: "21:00", displayTime: "9:00 PM", type: "Low", heightFt: 0.3 },
+  ],
+};
+// Use a thunderstorm forecast so the strand block is suppressed and the
+// 8:00 AM low is left to the beach-play candidate path. (Play blocks still
+// run on stormy days — the optimizer doesn't tie tide play to mood.)
+const earlyWeather = {
+  date: "2026-05-30",
+  highF: 78,
+  lowF: 64,
+  precipChancePct: 70,
+  windMphMax: 12,
+  windFromDir: "SW",
+  shortForecast: "Thunderstorms Likely",
+  emoji: "⛈️",
+};
+// With kids that can't be out before 9:00, the 8:00 AM low's ±90 window
+// (6:30–9:30) is clipped to 9:00–9:30 — too short to keep.
+const aggressivePace = {
+  earliestStart: "09:00",
+  latestEnd: "19:30",
+  kidsAge: "littleKids",
+};
+const earlyPaced = optimizeDaySchedule({
+  day: earlyLowDay,
+  allDays: [earlyLowDay],
+  nap,
+  weather: earlyWeather,
+  access: DEFAULT_ACCESS,
+  pace: aggressivePace,
+});
+const earlyPacedPlay = earlyPaced.blocks.find((b) => b.kind === "tide");
+assert.equal(
+  earlyPacedPlay,
+  undefined,
+  "8:00 AM low's window is dropped when earliestStart is 9:00 (too little left)",
+);
+
+// With the default pace (earliestStart 8:30), the same window keeps a 60-min
+// post-clip piece — and the reason copy should flag "too early for kids".
+const earlyDefaultPace = optimizeDaySchedule({
+  day: earlyLowDay,
+  allDays: [earlyLowDay],
+  nap,
+  weather: earlyWeather,
+  access: DEFAULT_ACCESS,
+});
+const earlyDefaultPlay = earlyDefaultPace.blocks.find((b) => b.kind === "tide");
+assert.ok(earlyDefaultPlay, "8:00 AM low survives the default 8:30 earliestStart");
+const startH = earlyDefaultPlay.start.getUTCHours();
+const startM = earlyDefaultPlay.start.getUTCMinutes();
+assert.ok(
+  startH > 8 || (startH === 8 && startM >= 30),
+  `play block must start at/after 08:30, got ${startH}:${String(startM).padStart(2, "0")}`,
+);
+assert.ok(
+  /too early/i.test(earlyDefaultPlay.reason),
+  `early-low play block should note "too early for kids", got: ${earlyDefaultPlay.reason}`,
+);
+
+// With latestEnd = 12:00, the 12:21–15:21 PM play window on May 17 should be
+// dropped (window starts after the family is done for the day).
+const dayWithTinyWindow = optimizeDaySchedule({
+  day: day17,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-17", highF: 82, lowF: 65, precipChancePct: 20, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+  pace: { earliestStart: "08:30", latestEnd: "12:00", kidsAge: "littleKids" },
+});
+const playWithTinyWindow = dayWithTinyWindow.blocks.find((b) => b.kind === "tide");
+assert.equal(
+  playWithTinyWindow,
+  undefined,
+  "play block dropped when latestEnd cuts off the play window",
+);
+console.log("✓ household pace clipping");
+
 console.log("\nAll smoke tests passed.");

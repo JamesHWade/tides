@@ -640,7 +640,8 @@ a {
   color: var(--muted);
 }
 
-.nap-fields input[type="time"] {
+.nap-fields input[type="time"],
+.nap-fields select {
   font: inherit;
   padding: 10px 12px;
   border-radius: 10px;
@@ -650,9 +651,14 @@ a {
   min-height: 44px;
 }
 
-.nap-fields input[type="time"]:focus {
+.nap-fields input[type="time"]:focus,
+.nap-fields select:focus {
   outline: 2px solid var(--sea-400);
   outline-offset: 1px;
+}
+
+.nap-fields__age {
+  min-width: 180px;
 }
 
 /* ---------- Day grid ---------- */
@@ -1600,6 +1606,229 @@ a {
   .schedule-block__body p {
     font-size: 0.8rem;
   }
+}
+
+/* ---------- Access summary (collapsed state) ---------- */
+.access-card--compact {
+  padding: clamp(12px, 2vw, 16px) clamp(14px, 2.4vw, 20px);
+}
+
+.access-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.access-summary__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.access-summary__title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--sea-700);
+  letter-spacing: -0.01em;
+}
+
+.access-summary__base {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+.access-summary__chips {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.access-summary__chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(79, 176, 201, 0.14);
+  color: var(--sea-700);
+  border: 1px solid rgba(79, 176, 201, 0.28);
+}
+
+.access-summary__none {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.access-summary__edit {
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--sea-200);
+  background: #fff;
+  color: var(--sea-700);
+  cursor: pointer;
+  min-height: 40px;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.access-summary__edit:hover {
+  background: var(--sea-50);
+}
+
+.access-summary__edit--collapse {
+  background: var(--sea-50);
+}
+
+.card-head--with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.card-head--with-action > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---------- Bonus divider (separates primary tides/weather from extras) ---------- */
+.bonus-divider {
+  margin: 4px 4px -8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bonus-divider::before,
+.bonus-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(31, 111, 139, 0.18);
+}
+
+.bonus-divider span {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sea-700);
+  font-size: 0.72rem;
+}
+
+/* ---------- Wildlife season card ---------- */
+.wildlife-season-card {
+  background: linear-gradient(180deg, #ffffff 0%, #ecf6ee 100%);
+}
+
+.wildlife-season-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .wildlife-season-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.wildlife-season-item {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(43, 138, 111, 0.18);
+  border-left: 4px solid var(--kelp);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wildlife-season-item__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.wildlife-season-item__emoji {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.wildlife-season-item__blurb {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.wildlife-season-item__where {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.wildlife-season-item__source {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.wildlife-season-item__source a {
+  color: var(--sea-600);
+}
+
+/* ---------- Schedule card: collapsed summary ---------- */
+.schedule-card > .schedule-card__summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px;
+}
+
+.schedule-card > .schedule-card__summary::-webkit-details-marker {
+  display: none;
+}
+
+.schedule-card__toggle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--sea-700);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.schedule-card[open] .schedule-card__toggle::after {
+  content: " ▴";
+}
+
+.schedule-card:not([open]) .schedule-card__toggle::after {
+  content: " ▾";
 }
 
 /* ---------- Reduced motion ---------- */

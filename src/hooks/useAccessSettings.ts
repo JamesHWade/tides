@@ -13,6 +13,7 @@ export type AccessSettings = {
   seabrookDigitalAmenityPass: boolean;
   seabrookClubAccessAmenityCard: boolean;
   seabrookEquestrianReservation: boolean;
+  seabrookRacquetClubReservation: boolean;
   preferPublicOnly: boolean;
 };
 
@@ -25,6 +26,7 @@ export const DEFAULT_ACCESS: AccessSettings = {
   seabrookDigitalAmenityPass: false,
   seabrookClubAccessAmenityCard: false,
   seabrookEquestrianReservation: false,
+  seabrookRacquetClubReservation: false,
   preferPublicOnly: false,
 };
 
@@ -46,6 +48,7 @@ function coerce(parsed: Partial<AccessSettings> | null): AccessSettings {
     "seabrookDigitalAmenityPass",
     "seabrookClubAccessAmenityCard",
     "seabrookEquestrianReservation",
+    "seabrookRacquetClubReservation",
     "preferPublicOnly",
   ];
   for (const f of flags) {

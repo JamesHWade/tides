@@ -34,7 +34,9 @@ export type ActivityKind =
   | "shopping"
   | "event"
   | "equine"
-  | "boat";
+  | "boat"
+  | "playground"
+  | "racquet";
 
 export type ActivityArea =
   | "kiawah"
@@ -219,6 +221,23 @@ export const ACTIVITIES: Activity[] = [
     sourceUrl: "https://kiawahresort.com/things-to-do/family-activities/",
     lastVerifiedISO: "2026-05-17",
   },
+  {
+    id: "kiawah-night-heron-playground",
+    name: "Night Heron Park playground",
+    area: "kiawah",
+    kind: "playground",
+    durationMins: 45,
+    access: { anyOf: ["kiawahResortGuest", "kiawahGovernorClub"] },
+    kidFit: "littleKids",
+    weatherFit: { goodWeather: true },
+    hours: [{ open: "07:00", close: "20:00" }],
+    sourceLabel: "Kiawah Island Recreation — Night Heron Park",
+    sourceUrl: "https://kiawahresort.com/things-to-do/family-activities/",
+    lastVerifiedISO: "2026-05-17",
+    plannerNotes: [
+      "Shaded play structure next to the pool — easy 30-min stop before or after pool time.",
+    ],
+  },
 
   // --- Seabrook -------------------------------------------------------------
   {
@@ -234,7 +253,7 @@ export const ACTIVITIES: Activity[] = [
     sourceLabel: "Seabrook Island Club — Beach Club",
     sourceUrl: "https://discoverseabrook.com/the-club/the-beach-club/",
     lastVerifiedISO: "2026-05-17",
-    plannerNotes: ["Towels included with the Digital Amenity Pass."],
+    plannerNotes: ["Oceanfront pool + chair/towel service with the Digital Amenity Pass."],
   },
   {
     id: "seabrook-small-family-pool",
@@ -249,6 +268,74 @@ export const ACTIVITIES: Activity[] = [
     sourceLabel: "Seabrook Island Club — pools",
     sourceUrl: "https://discoverseabrook.com/the-club/",
     lastVerifiedISO: "2026-05-17",
+    plannerNotes: ["Quieter wading pool next to the Beach Club — best for toddlers."],
+  },
+  {
+    id: "seabrook-lake-house-pool",
+    name: "Lake House pool",
+    area: "seabrook",
+    kind: "pool",
+    durationMins: 120,
+    access: { allOf: ["seabrookDigitalAmenityPass"] },
+    kidFit: "wholeFamily",
+    weatherFit: { goodWeather: true, heatRelief: true },
+    hours: [{ open: "09:00", close: "19:00" }],
+    sourceLabel: "Seabrook Island Club — The Lake House",
+    sourceUrl: "https://discoverseabrook.com/the-club/the-lake-house/",
+    lastVerifiedISO: "2026-05-17",
+    plannerNotes: [
+      "Inland family pool at the Lake House — quieter than the Beach Club on hot afternoons.",
+    ],
+  },
+  {
+    id: "seabrook-lake-house-splash",
+    name: "Lake House splash zone",
+    area: "seabrook",
+    kind: "pool",
+    durationMins: 60,
+    access: { allOf: ["seabrookDigitalAmenityPass"] },
+    kidFit: "toddlers",
+    weatherFit: { goodWeather: true, heatRelief: true },
+    hours: [{ open: "09:00", close: "18:00" }],
+    sourceLabel: "Seabrook Island Club — The Lake House",
+    sourceUrl: "https://discoverseabrook.com/the-club/the-lake-house/",
+    lastVerifiedISO: "2026-05-17",
+    plannerNotes: ["Zero-entry splash area — easy water play for under-5s."],
+  },
+  {
+    id: "seabrook-lake-house-playground",
+    name: "Lake House playground",
+    area: "seabrook",
+    kind: "playground",
+    durationMins: 45,
+    access: { allOf: ["seabrookDigitalAmenityPass"] },
+    kidFit: "littleKids",
+    weatherFit: { goodWeather: true },
+    hours: [{ open: "07:00", close: "20:00" }],
+    sourceLabel: "Seabrook Island Club — The Lake House",
+    sourceUrl: "https://discoverseabrook.com/the-club/the-lake-house/",
+    lastVerifiedISO: "2026-05-17",
+    plannerNotes: [
+      "Shaded playground next to the Lake House — pair with the splash zone or a Lake House meal.",
+    ],
+  },
+  {
+    id: "seabrook-racquet-club",
+    name: "Seabrook Racquet Club (tennis / pickleball)",
+    area: "seabrook",
+    kind: "racquet",
+    durationMins: 75,
+    access: { allOf: ["seabrookRacquetClubReservation"] },
+    reservationRequired: true,
+    kidFit: "olderKids",
+    weatherFit: { goodWeather: true },
+    hours: [{ open: "08:00", close: "19:00" }],
+    sourceLabel: "Seabrook Island Racquet Club",
+    sourceUrl: "https://discoverseabrook.com/the-club/the-racquet-club/",
+    lastVerifiedISO: "2026-05-17",
+    plannerNotes: [
+      "Court reservations book in advance — call the pro shop the day before.",
+    ],
   },
   {
     id: "seabrook-beach-club-dining",

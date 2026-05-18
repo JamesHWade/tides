@@ -10,6 +10,8 @@ import type { DayPlan } from "../data/tides";
 import type { Activity } from "../data/activities";
 import { ACTIVITIES } from "../data/activities";
 import type { AccessSettings } from "../hooks/useAccessSettings";
+import type { HouseholdPace, KidsAgeGroup } from "../hooks/useHouseholdPace";
+import { DEFAULT_PACE } from "../hooks/useHouseholdPace";
 import type { DayWeather } from "./runtimeWeather";
 import {
   addMinutes,
@@ -78,6 +80,12 @@ export type ScheduleInput = {
   nap: NapSettings;
   weather?: DayWeather;
   access: AccessSettings;
+  /**
+   * Family pace: earliest realistic "out the door" time, latest sane evening
+   * end time, and kid age group. Falls back to a sensible default — the
+   * smoke tests and any older callers can omit it.
+   */
+  pace?: HouseholdPace;
   now?: Date;
 };
 
@@ -173,13 +181,32 @@ function outdoorPenalty(mood: WeatherMood): number {
 // Activity scoring
 // ---------------------------------------------------------------------------
 
+function ageFit(a: Activity, group: KidsAgeGroup): number {
+  // Soft preference, not a hard filter — a "littleKids" trip should still
+  // see "wholeFamily" picks rise to the top, with "toddlers"-only or
+  // "olderKids"-only options scored down but still visible in the gated
+  // list.
+  if (a.kidFit === "wholeFamily" || group === "mixed") return 0;
+  if (a.kidFit === group) return 0.5;
+  // Adjacent bands (toddler/littleKids, littleKids/olderKids) are mild
+  // mismatches; opposite ends (toddlers/olderKids) are bigger ones.
+  const dist =
+    (group === "toddlers" && a.kidFit === "olderKids") ||
+    (group === "olderKids" && a.kidFit === "toddlers")
+      ? 2
+      : 1;
+  return -1 * dist;
+}
+
 function activityScore(
   a: Activity,
   mood: WeatherMood,
   dateISO: string,
+  pace: HouseholdPace,
 ): number {
   let score = 0;
   if (!isActivityInSeason(a, dateISO)) return -10;
+  score += ageFit(a, pace.kidsAge);
 
   switch (a.kind) {
     case "pool":
@@ -190,6 +217,13 @@ function activityScore(
       // Indoor is also fine on a mild day, just less compelling.
       if (mood === "mild") score += 0.5;
       break;
+    case "playground":
+      // A 30–45 min outdoor stop — most welcome on mild/cool days, painful in
+      // extreme heat where the metal/plastic structures bake.
+      score += 1.5 + outdoorPenalty(mood);
+      if (mood === "hot") score -= 1;
+      break;
+    case "racquet":
     case "nature":
     case "beach":
     case "boat":
@@ -336,11 +370,14 @@ function trimAgainstNap(
 
 export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
   const { day, nap, weather, access } = input;
+  const pace = input.pace ?? DEFAULT_PACE;
   const mood = moodFor(weather);
   const naps = napInterval(day.date, nap);
   const sun = sunTimes(day.date);
   const strand = scoreStrandDay(day, weather);
   const isTravelDay = isTravelNote(day.notes);
+  const familyStart = timeOn(day.date, pace.earliestStart);
+  const familyEnd = timeOn(day.date, pace.latestEnd);
 
   const blocks: ScheduleBlock[] = [];
   const skipped: Array<{ activityId: string; reason: string }> = [];
@@ -372,6 +409,16 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     );
   }
 
+  // Helper bound to this day's family-pace window. Returns null if the
+  // remaining piece is < 45 min (no point recommending a 20-min slot).
+  const clipToFamilyHours = (win: { start: Date; end: Date }) => {
+    if (win.end <= familyStart || win.start >= familyEnd) return null;
+    const s = win.start < familyStart ? familyStart : win.start;
+    const e = win.end > familyEnd ? familyEnd : win.end;
+    if (e.getTime() - s.getTime() < 45 * 60_000) return null;
+    return { start: s, end: e };
+  };
+
   // 3. Strand block. Skip on thunderstorm days.
   let strandBlock: ScheduleBlock | null = null;
   let usedStrandLowTime: string | null = null;
@@ -381,12 +428,13 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     (strand.rating === "favorable" || strand.rating === "marginal")
   ) {
     const trimmed = trimAgainstNap(strand.bestWindow, naps);
-    if (trimmed) {
+    const pacedStrand = trimmed ? clipToFamilyHours(trimmed) : null;
+    if (pacedStrand) {
       strandBlock = {
         id: `strand-${day.date}`,
         label: "Strand-feeding watch + low-tide beach walk",
-        start: trimmed.start,
-        end: trimmed.end,
+        start: pacedStrand.start,
+        end: pacedStrand.end,
         kind: "strand",
         confidence: strand.rating === "favorable" ? "high" : "medium",
         reason: `Anchored to the ${strand.bestWindow.low.displayTime.toLowerCase()} low. Stay ≥15 yds from the waterline; sightings are never guaranteed.`,
@@ -397,25 +445,44 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
   }
 
   // 4. Beach-play block on a daylight low (skip duplicate if strand block
-  // already occupies the same low).
+  // already occupies the same low). Each candidate is also clipped to the
+  // family's "out the door" → "evening done" window — a 6:15 AM low isn't a
+  // useful recommendation if the kids can't be out before 8:30.
   const lows = day.tides.filter((t) => t.type === "Low");
-  const playWindows: Array<{ win: Window; lowTime: string }> = lows
+  const playWindows: Array<{
+    win: Window;
+    lowTime: string;
+    paced: { start: Date; end: Date };
+  }> = lows
     .map((l) => {
       const w = lowTidePlayWindow(day, l, 90, sun);
-      return w ? { win: w, lowTime: l.time } : null;
+      if (!w) return null;
+      const paced = clipToFamilyHours({ start: w.start, end: w.end });
+      if (!paced) return null;
+      return { win: w, lowTime: l.time, paced };
     })
-    .filter((x): x is { win: Window; lowTime: string } => x != null);
+    .filter(
+      (x): x is { win: Window; lowTime: string; paced: { start: Date; end: Date } } =>
+        x != null,
+    );
 
   // Pick the best daylight play window that doesn't fully collide with nap.
-  let chosenPlay: { win: Window; lowTime: string } | null = null;
+  let chosenPlay:
+    | { win: Window; lowTime: string; paced: { start: Date; end: Date } }
+    | null = null;
   for (const candidate of playWindows) {
     if (usedStrandLowTime === candidate.lowTime) continue;
-    if (conflictsWithNap(candidate.win, naps)) continue;
+    const paceWindow: Window = {
+      ...candidate.win,
+      start: candidate.paced.start,
+      end: candidate.paced.end,
+    };
+    if (conflictsWithNap(paceWindow, naps)) continue;
     if (
       strandBlock &&
       windowsOverlap(
-        candidate.win.start,
-        candidate.win.end,
+        paceWindow.start,
+        paceWindow.end,
         strandBlock.start,
         strandBlock.end,
       )
@@ -426,29 +493,41 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     break;
   }
   if (chosenPlay) {
+    const lowTimeMins = (() => {
+      const [h, m] = chosenPlay.win.tide?.time.split(":").map(Number) ?? [0, 0];
+      return (h ?? 0) * 60 + (m ?? 0);
+    })();
+    const startMins =
+      familyStart.getUTCHours() * 60 + familyStart.getUTCMinutes();
+    const earlyLow = lowTimeMins < startMins;
     blocks.push({
       id: `play-${day.date}-${chosenPlay.lowTime}`,
       label: "Low-tide beach play",
-      start: chosenPlay.win.start,
-      end: chosenPlay.win.end,
+      start: chosenPlay.paced.start,
+      end: chosenPlay.paced.end,
       kind: "tide",
       confidence: "high",
-      reason: `Centered on the ${chosenPlay.win.tide?.displayTime.toLowerCase()} low (${chosenPlay.win.tide?.heightFt.toFixed(1)} ft). Flat sand and shallow pools.`,
+      reason: earlyLow
+        ? `Low was at ${chosenPlay.win.tide?.displayTime.toLowerCase()} — too early for kids, but the sand stays walkable for a couple hours after.`
+        : `Centered on the ${chosenPlay.win.tide?.displayTime.toLowerCase()} low (${chosenPlay.win.tide?.heightFt.toFixed(1)} ft). Flat sand and shallow pools.`,
     });
   }
 
   // 5. Choose one allowed activity per "slot": morning and afternoon-after-nap.
+  // Slot boundaries are clipped to the family's earliestStart / latestEnd so a
+  // 6 AM "morning slot" never offers anything, and a 7:30 PM cap keeps the
+  // evening sane.
   type Slot = { name: string; start: Date; end: Date };
   const slots: Slot[] = [
     {
       name: "morning",
-      start: timeOn(day.date, "09:00"),
+      start: familyStart > naps.start ? naps.start : familyStart,
       end: naps.start,
     },
     {
       name: "afternoon",
       start: naps.end,
-      end: timeOn(day.date, "19:00"),
+      end: familyEnd < naps.end ? naps.end : familyEnd,
     },
   ];
 
@@ -472,7 +551,7 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
 
     // Rank allowed activities for this slot.
     const ranked = allowed
-      .map((a) => ({ a, s: activityScore(a, mood, day.date) }))
+      .map((a) => ({ a, s: activityScore(a, mood, day.date, pace) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s);
 
@@ -503,15 +582,19 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     if (chosenBlock) blocks.push(chosenBlock);
   }
 
-  // 6. Public fallback list — always present.
+  // 6. Public fallback list — always present, anchored to the family's
+  // late-afternoon window (or clamped if their day ends earlier).
   const publicFallback: ScheduleBlock[] = [];
+  const fallbackStart = familyEnd < timeOn(day.date, "16:00")
+    ? addMinutes(familyEnd, -90)
+    : timeOn(day.date, "16:00");
   for (const id of PUBLIC_FALLBACK_IDS) {
     const a = ACTIVITIES.find((x) => x.id === id);
     if (!a) continue;
     const block = buildActivityBlock(
       a,
       day.date,
-      timeOn(day.date, "16:00"),
+      fallbackStart,
       a.durationMins,
       "Open to anyone — no club credentials needed.",
       "fallback",

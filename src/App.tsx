@@ -13,12 +13,14 @@ import { AccessSettingsCard } from "./components/AccessSettings";
 import { BestDaySummary } from "./components/BestDaySummary";
 import { DayCard } from "./components/DayCard";
 import { StrandFeedingPanel } from "./components/StrandFeedingPanel";
+import { WildlifeSeasonCard } from "./components/WildlifeSeasonCard";
 import { WeekOverview } from "./components/WeekOverview";
 import { TripStatus } from "./components/TripStatus";
 import { DayNav } from "./components/DayNav";
 import { DateRangePicker } from "./components/DateRangePicker";
 import { useAccessSettings } from "./hooks/useAccessSettings";
 import { useDateRange } from "./hooks/useDateRange";
+import { useHouseholdPace } from "./hooks/useHouseholdPace";
 import { useTideDays } from "./hooks/useTideDays";
 import { useWeather } from "./hooks/useWeather";
 
@@ -90,6 +92,7 @@ export default function App() {
   } = useTideDays(range);
   const weather = useWeather();
   const [access, setAccess] = useAccessSettings();
+  const [pace, setPace] = useHouseholdPace();
 
   const bestDays = useMemo(() => {
     if (days.length === 0) return {};
@@ -100,6 +103,7 @@ export default function App() {
         nap,
         weather: weather.byDate.get(d.date),
         access,
+        pace,
         now,
       }),
     );
@@ -114,11 +118,12 @@ export default function App() {
         nap,
         weather: weather.byDate.get(d.date),
         access: publicOnlyAccess,
+        pace,
         now,
       }),
     );
     return pickBestDays(schedules, publicOnly);
-  }, [days, nap, weather.byDate, access, now]);
+  }, [days, nap, pace, weather.byDate, access, now]);
 
   useEffect(() => {
     try {
@@ -192,9 +197,21 @@ export default function App() {
 
         <DayNav days={days} todayISO={todayISO} />
 
+        <WildlifeSeasonCard startISO={range.startISO} endISO={range.endISO} />
+
+        <p className="bonus-divider">
+          <span>Bonus planning layer</span> — tides &amp; weather are the
+          primary product; tune the rest below.
+        </p>
+
         <BestDaySummary best={bestDays} onJump={scrollToDay} />
 
-        <NapSettingsCard value={nap} onChange={setNap} />
+        <NapSettingsCard
+          nap={nap}
+          pace={pace}
+          onNapChange={setNap}
+          onPaceChange={setPace}
+        />
 
         <AccessSettingsCard value={access} onChange={setAccess} />
 
@@ -209,6 +226,7 @@ export default function App() {
                 day={day}
                 allDays={days}
                 nap={nap}
+                pace={pace}
                 weather={weather.byDate.get(day.date)}
                 access={access}
                 now={now}
