@@ -1704,31 +1704,9 @@ a {
   min-width: 0;
 }
 
-/* ---------- Bonus divider (separates primary tides/weather from extras) ---------- */
-.bonus-divider {
-  margin: 4px 4px -8px;
-  font-size: 0.82rem;
-  color: var(--muted);
-  text-align: center;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.bonus-divider::before,
-.bonus-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: rgba(31, 111, 139, 0.18);
-}
-
-.bonus-divider span {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--sea-700);
-  font-size: 0.72rem;
+/* ---------- Today section (single day pulled above the grid) ---------- */
+.today-section {
+  display: block;
 }
 
 /* ---------- Wildlife season card ---------- */
