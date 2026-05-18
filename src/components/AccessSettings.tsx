@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AccessSettings } from "../hooks/useAccessSettings";
 
 type Props = {
@@ -38,7 +39,7 @@ const SEABROOK_FLAGS: FlagRow[] = [
   {
     key: "seabrookDigitalAmenityPass",
     label: "Seabrook Digital Amenity Pass",
-    hint: "Beach Club + pools + towel service.",
+    hint: "Beach Club, Lake House pool/splash/playground, towel service.",
   },
   {
     key: "seabrookClubAccessAmenityCard",
@@ -50,19 +51,125 @@ const SEABROOK_FLAGS: FlagRow[] = [
     label: "Confirmed equestrian reservation",
     hint: "Pony rides and trail rides at the Equestrian Center.",
   },
+  {
+    key: "seabrookRacquetClubReservation",
+    label: "Confirmed Racquet Club reservation",
+    hint: "Tennis and pickleball at the Racquet Club.",
+  },
 ];
 
+const STAY_BASE_LABEL: Record<AccessSettings["stayBase"], string> = {
+  kiawah: "Kiawah Island",
+  seabrook: "Seabrook Island",
+  offIsland: "Off-island",
+  unknown: "Not set",
+};
+
+const FLAG_SHORT_LABEL: Record<FlagRow["key"], string> = {
+  kiawahResortGuest: "Kiawah resort",
+  kiawahGovernorClub: "Governor's Club",
+  kiawahSanctuaryGuest: "Sanctuary stay",
+  kiawahConfirmedRecreationReservation: "Kiawah activity rsvp",
+  seabrookDigitalAmenityPass: "Seabrook Amenity Pass",
+  seabrookClubAccessAmenityCard: "Seabrook Club Access",
+  seabrookEquestrianReservation: "Equestrian rsvp",
+  seabrookRacquetClubReservation: "Racquet rsvp",
+  preferPublicOnly: "Public only",
+};
+
+function isConfigured(v: AccessSettings): boolean {
+  if (v.stayBase !== "unknown") return true;
+  return Object.entries(v).some(
+    ([k, val]) => k !== "stayBase" && val === true,
+  );
+}
+
+function activeFlagLabels(v: AccessSettings): string[] {
+  const labels: string[] = [];
+  for (const key of Object.keys(FLAG_SHORT_LABEL) as Array<keyof typeof FLAG_SHORT_LABEL>) {
+    if (v[key] === true) labels.push(FLAG_SHORT_LABEL[key]);
+  }
+  return labels;
+}
+
 export function AccessSettingsCard({ value, onChange }: Props) {
+  const configured = useMemo(() => isConfigured(value), [value]);
+  // Open by default for a brand-new visitor (nothing configured). When the
+  // user makes their first selection — flipping `configured` from false to
+  // true — auto-collapse into the chip summary, matching the documented
+  // "set it once" UX. After that, the user drives open/close via Edit /
+  // Hide; we don't auto-collapse mid-edit when individual checkboxes flip.
+  const [open, setOpen] = useState<boolean>(!configured);
+  const wasConfiguredRef = useRef<boolean>(configured);
+
+  useEffect(() => {
+    if (!wasConfiguredRef.current && configured) {
+      setOpen(false);
+    }
+    wasConfiguredRef.current = configured;
+  }, [configured]);
+
   const update = <K extends keyof AccessSettings>(key: K, v: AccessSettings[K]) =>
     onChange({ ...value, [key]: v });
 
+  if (!open) {
+    const labels = activeFlagLabels(value);
+    return (
+      <section className="card access-card access-card--compact" aria-labelledby="access-heading">
+        <div className="access-summary">
+          <div className="access-summary__text">
+            <h2 id="access-heading" className="access-summary__title">
+              Amenity access
+            </h2>
+            <p className="access-summary__base">
+              Staying: <strong>{STAY_BASE_LABEL[value.stayBase]}</strong>
+            </p>
+            {labels.length > 0 ? (
+              <ul className="access-summary__chips" aria-label="Active amenities">
+                {labels.map((l) => (
+                  <li key={l} className="access-summary__chip">
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="access-summary__none muted">
+                No amenity flags set — schedule will use the public fallback.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            className="access-summary__edit"
+            onClick={() => setOpen(true)}
+            aria-expanded="false"
+          >
+            Edit access
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="card access-card" aria-labelledby="access-heading">
-      <div className="card-head">
-        <h2 id="access-heading">Amenity access</h2>
-        <p className="card-sub">
-          Used to hide plans your family cannot access. Saved on this device.
-        </p>
+      <div className="card-head card-head--with-action">
+        <div>
+          <h2 id="access-heading">Amenity access</h2>
+          <p className="card-sub">
+            Used to hide plans your family cannot access. Saved on this device.
+          </p>
+        </div>
+        {configured && (
+          <button
+            type="button"
+            className="access-summary__edit access-summary__edit--collapse"
+            onClick={() => setOpen(false)}
+            aria-expanded="true"
+          >
+            Hide
+          </button>
+        )}
       </div>
 
       <div className="access-fields">

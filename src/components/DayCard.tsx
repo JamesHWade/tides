@@ -1,11 +1,13 @@
 import type { DayPlan } from "../data/tides";
 import {
   bestDailyRecommendation,
+  clipWindowsToFamilyHours,
   conflictsWithNap,
   formatClock,
   formatWindow,
-  lowTidePlayWindow,
+  goodBeachWindows,
   napInterval,
+  timeOn,
   type NapSettings,
 } from "../utils/tideUtils";
 import { sunTimes } from "../utils/sunTimes";
@@ -18,27 +20,45 @@ import { scoreStrandDay } from "../utils/strandScore";
 import { optimizeDaySchedule } from "../utils/scheduleOptimizer";
 import type { DayWeather } from "../utils/runtimeWeather";
 import type { AccessSettings } from "../hooks/useAccessSettings";
+import type { HouseholdPace } from "../hooks/useHouseholdPace";
 
 type Props = {
   day: DayPlan;
   allDays: DayPlan[];
   nap: NapSettings;
+  pace: HouseholdPace;
   weather?: DayWeather;
   access: AccessSettings;
   now?: Date;
   isToday?: boolean;
 };
 
-export function DayCard({ day, allDays, nap, weather, access, now, isToday }: Props) {
+export function DayCard({
+  day,
+  allDays,
+  nap,
+  pace,
+  weather,
+  access,
+  now,
+  isToday,
+}: Props) {
   const lows = day.tides.filter((t) => t.type === "Low");
   const highs = day.tides.filter((t) => t.type === "High");
   const napRange = napInterval(day.date, nap);
 
   const sun = sunTimes(day.date);
-  const playWindows = lows
-    .map((l) => lowTidePlayWindow(day, l, 90, sun))
-    .filter((w): w is NonNullable<typeof w> => w != null);
-  const recommendation = bestDailyRecommendation(day, nap, sun);
+  // Beach time is good anywhere except ±90 min around high tide. Clip those
+  // raw daylight windows to the family's "out the door → done" hours so the
+  // displayed windows match what the optimizer actually schedules.
+  const familyStart = timeOn(day.date, pace.earliestStart);
+  const familyEnd = timeOn(day.date, pace.latestEnd);
+  const playWindows = clipWindowsToFamilyHours(
+    goodBeachWindows(day, sun, 90),
+    familyStart,
+    familyEnd,
+  );
+  const recommendation = bestDailyRecommendation(day, nap, sun, pace);
 
   const anyConflict = playWindows.some((w) => conflictsWithNap(w, napRange));
   const allConflict =
@@ -51,6 +71,7 @@ export function DayCard({ day, allDays, nap, weather, access, now, isToday }: Pr
     nap,
     weather,
     access,
+    pace,
     now,
   });
 
@@ -84,10 +105,10 @@ export function DayCard({ day, allDays, nap, weather, access, now, isToday }: Pr
 
         <p className="day-recommendation">{recommendation}</p>
         <div className="badge-row">
-          {lows.length === 0 ? (
-            <RecommendationBadge variant="info">No low tide today</RecommendationBadge>
-          ) : playWindows.length === 0 ? (
-            <RecommendationBadge variant="info">All lows outside daylight</RecommendationBadge>
+          {playWindows.length === 0 ? (
+            <RecommendationBadge variant="info">
+              Beach time is tight today
+            </RecommendationBadge>
           ) : allConflict ? (
             <RecommendationBadge variant="conflict">Nap conflict today</RecommendationBadge>
           ) : anyConflict ? (
@@ -128,18 +149,24 @@ export function DayCard({ day, allDays, nap, weather, access, now, isToday }: Pr
       <div className="window-list">
         {playWindows.map((w) => {
           const conflict = conflictsWithNap(w, napRange);
+          const nearLow = w.tide != null;
+          const badgeLabel = conflict
+            ? "Nap conflict"
+            : nearLow
+              ? "Best low-tide play"
+              : "Good beach time";
           return (
             <div key={`play-${w.start.toISOString()}`} className="window-item">
               <div className="window-title">
                 <RecommendationBadge variant={conflict ? "conflict" : "play"}>
-                  {conflict ? "Nap conflict" : "Best low-tide play"}
+                  {badgeLabel}
                 </RecommendationBadge>
                 <span className="window-time">{formatWindow(w)}</span>
               </div>
               <p className="window-sub">
-                Centered on the {w.tide?.displayTime.toLowerCase()} low (
-                {w.tide?.heightFt.toFixed(1)} ft). Lower water often means more
-                flat sand and shallow pools for little feet.
+                {nearLow
+                  ? `Anchored on the ${w.tide?.displayTime.toLowerCase()} low (${w.tide?.heightFt.toFixed(1)} ft). Flat sand and shallow pools for little feet.`
+                  : "Well away from the day's high-tide bands — the wet-sand strip is workable even without a nearby low."}
               </p>
             </div>
           );

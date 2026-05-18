@@ -10,6 +10,7 @@ const FLAG_LABEL: Record<AccessFlag, string> = {
   seabrookDigitalAmenityPass: "Seabrook Digital Amenity Pass",
   seabrookClubAccessAmenityCard: "Seabrook Club Access Amenity Card",
   seabrookEquestrianReservation: "Seabrook equestrian reservation",
+  seabrookRacquetClubReservation: "Seabrook Racquet Club reservation",
 };
 
 function hasAll(flags: AccessFlag[] | undefined, access: AccessSettings): boolean {

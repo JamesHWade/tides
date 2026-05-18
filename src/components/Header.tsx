@@ -38,9 +38,10 @@ export function Header({ range }: Props = {}) {
           {showingTrip ? TRIP_RANGE.label : "Custom dates"} · tides from {STATION.name}
         </p>
         <p className="hero-note">
-          Times are predictions at the Kiawah River Bridge station. Open-beach
-          conditions at Beachwalker, Captain Sams, and the Seabrook accesses
-          shift by a few minutes — give yourself a buffer.
+          Tides and weather come first — everything else (schedule, amenity
+          picks, wildlife notes) is bonus context. Times are predictions at
+          the Kiawah River Bridge station; conditions at Beachwalker, Captain
+          Sams, and the Seabrook accesses shift by a few minutes.
         </p>
         {!DATA_VERIFIED && (
           <p className="hero-warning" role="status">

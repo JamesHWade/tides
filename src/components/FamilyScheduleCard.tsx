@@ -32,11 +32,20 @@ export function FamilyScheduleCard({ schedule }: Props) {
   }, [schedule.skipped]);
 
   return (
-    <section className="schedule-card" aria-label="Family schedule">
-      <header className="schedule-card__head">
-        <strong className="schedule-card__title">Best plan with your access</strong>
-        <span className="schedule-card__headline">{schedule.headline}</span>
-      </header>
+    <details className="schedule-card" aria-label="Family schedule">
+      <summary className="schedule-card__summary">
+        <div className="schedule-card__head">
+          <strong className="schedule-card__title">Bonus: a plan for the day</strong>
+          <span className="schedule-card__headline">{schedule.headline}</span>
+        </div>
+        {/* Label flips between "Show" / "Hide" via CSS on the parent
+            <details> [open] state — keeps the text and the action in sync
+            without React having to listen for toggle events. */}
+        <span className="schedule-card__toggle" aria-hidden="true" />
+        <span className="visually-hidden">
+          Toggle schedule details
+        </span>
+      </summary>
 
       <ol className="schedule-blocks">
         {visibleBlocks.map((b) => (
@@ -102,6 +111,6 @@ export function FamilyScheduleCard({ schedule }: Props) {
           </ul>
         </details>
       )}
-    </section>
+    </details>
   );
 }

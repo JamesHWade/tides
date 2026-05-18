@@ -202,21 +202,32 @@ const afterSunsetStub = { date: "2026-05-17", label: "Sunday, May 17", tides: [a
 const afterSunsetWindow = lowTidePlayWindow(afterSunsetStub, afterSunsetLow, 90, may17Sun);
 assert.equal(afterSunsetWindow, null, "post-sunset low should not produce a play window");
 
-// Recommendation copy must not promise "morning beach play" for an all-night low.
-const onlyNightDay = { date: "2026-05-17", label: "Sunday, May 17", tides: [nightLow] };
+// Recommendation copy must not promise "morning beach play" when the only
+// low is overnight; the day still has workable beach time between the highs,
+// but the copy should flag that low tide is out of reach.
+const onlyNightDayStub = {
+  date: "2026-05-17",
+  label: "Sunday, May 17",
+  tides: [
+    nightLow,
+    { time: "07:38", displayTime: "7:38 AM", type: "High", heightFt: 6.4 },
+    { time: "20:09", displayTime: "8:09 PM", type: "High", heightFt: 6.7 },
+  ],
+};
 const recNight = bestDailyRecommendation(
-  onlyNightDay,
+  onlyNightDayStub,
   { napStart: "13:00", napEnd: "15:00" },
   may17Sun,
 );
 assert.ok(
   /outside daylight/i.test(recNight),
-  `nighttime-only low should produce an outside-daylight rec, got: ${recNight}`,
+  `nighttime-only low should mention "outside daylight", got: ${recNight}`,
 );
 
-// Daytime low + nap clear of it → cheerful afternoon rec (May 17's 1:51 PM
-// low gives a 12:21 PM – 3:21 PM window; with a 9:00 AM nap there's no
-// conflict so we should land on the afternoon copy, not the fallback).
+// Daytime low + nap clear of it → cheerful afternoon rec. May 17 has a
+// 1:51 PM low; even with a morning nap (9–10:30) overlapping the start
+// of the post-high beach window, the post-nap segment still anchors on the
+// afternoon low, so the copy should mention "afternoon".
 const recDay = bestDailyRecommendation(
   may17Stub,
   { napStart: "09:00", napEnd: "10:30" },
@@ -226,6 +237,29 @@ assert.ok(
   /afternoon/i.test(recDay) && !/overlap nap/i.test(recDay),
   `daytime low with clear nap should produce an afternoon rec, got: ${recDay}`,
 );
+
+// May 17 with realistic highs and a nap that swallows the entire single
+// good window (9:08 AM – 6:39 PM) should produce the "overlap nap" copy.
+const may17Full = {
+  date: "2026-05-17",
+  label: "Sunday, May 17",
+  tides: [
+    nightLow,
+    { time: "07:38", displayTime: "7:38 AM", type: "High", heightFt: 6.4 },
+    dayLow,
+    { time: "20:09", displayTime: "8:09 PM", type: "High", heightFt: 6.7 },
+  ],
+};
+const recBigNap = bestDailyRecommendation(
+  may17Full,
+  { napStart: "09:00", napEnd: "19:00" },
+  may17Sun,
+);
+assert.ok(
+  /overlap nap/i.test(recBigNap),
+  `huge nap should flag overlap with the good beach window, got: ${recBigNap}`,
+);
+
 console.log("✓ daylight-aware recommendations");
 
 // --- 5. activity access filtering --------------------------------------------
@@ -618,5 +652,176 @@ const validDates = new Set(optDays.map((d) => d.date));
 assert.ok(validDates.has(bestNoArg.publicOnly.date));
 assert.ok(validDates.has(bestTwoArg.publicOnly.date));
 console.log("✓ pickBestDays");
+
+// --- 8. household pace clips early/late windows ----------------------------
+// Synthetic day with one early-morning low and a high in the afternoon. Highs
+// at 1:30 AM and 2:30 PM mean the daylight "good beach" window stretches
+// from sunrise (~6:15) to ~1:00 PM (start of the ±90-min high band), with
+// the 8:00 AM low sitting inside it.
+const earlyLowDay = {
+  date: "2026-05-30",
+  label: "Saturday, May 30",
+  tides: [
+    { time: "01:30", displayTime: "1:30 AM", type: "High", heightFt: 5.0 },
+    { time: "08:00", displayTime: "8:00 AM", type: "Low", heightFt: -0.2 },
+    { time: "14:30", displayTime: "2:30 PM", type: "High", heightFt: 5.2 },
+    { time: "21:00", displayTime: "9:00 PM", type: "Low", heightFt: 0.3 },
+  ],
+};
+// Use a thunderstorm forecast so the strand block is suppressed and the
+// beach-play candidate path drives the result. (Play blocks still run on
+// stormy days — the optimizer doesn't tie tide play to mood.)
+const earlyWeather = {
+  date: "2026-05-30",
+  highF: 78,
+  lowF: 64,
+  precipChancePct: 70,
+  windMphMax: 12,
+  windFromDir: "SW",
+  shortForecast: "Thunderstorms Likely",
+  emoji: "⛈️",
+};
+
+// With kids that can't be out before 9:00, the morning beach window is
+// clipped to start at 9:00, but the rest of it (until 1:00 PM, when the
+// 2:30 PM high's ±90-min bad band starts) is still usable. The block should
+// exist and start at 09:00.
+const aggressivePace = {
+  earliestStart: "09:00",
+  latestEnd: "19:30",
+  kidsAge: "littleKids",
+};
+const earlyPaced = optimizeDaySchedule({
+  day: earlyLowDay,
+  allDays: [earlyLowDay],
+  nap,
+  weather: earlyWeather,
+  access: DEFAULT_ACCESS,
+  pace: aggressivePace,
+});
+const earlyPacedPlay = earlyPaced.blocks.find((b) => b.kind === "tide");
+assert.ok(
+  earlyPacedPlay,
+  "beach window survives because it extends to ~1:00 PM (well away from the 2:30 PM high)",
+);
+assert.equal(
+  earlyPacedPlay.start.getUTCHours(),
+  9,
+  `paced play block must start at 09:00, got ${earlyPacedPlay.start.toISOString()}`,
+);
+assert.equal(
+  earlyPacedPlay.start.getUTCMinutes(),
+  0,
+  "paced play block start minute is 00",
+);
+
+// With the default pace (earliestStart 8:30), the same window keeps a bigger
+// piece — but the low itself (8:00 AM) is before earliest start, so the
+// reason copy should flag "too early for kids".
+const earlyDefaultPace = optimizeDaySchedule({
+  day: earlyLowDay,
+  allDays: [earlyLowDay],
+  nap,
+  weather: earlyWeather,
+  access: DEFAULT_ACCESS,
+});
+const earlyDefaultPlay = earlyDefaultPace.blocks.find((b) => b.kind === "tide");
+assert.ok(earlyDefaultPlay, "morning beach window survives the default 8:30 earliestStart");
+const startH = earlyDefaultPlay.start.getUTCHours();
+const startM = earlyDefaultPlay.start.getUTCMinutes();
+assert.ok(
+  startH > 8 || (startH === 8 && startM >= 30),
+  `play block must start at/after 08:30, got ${startH}:${String(startM).padStart(2, "0")}`,
+);
+assert.ok(
+  /too early/i.test(earlyDefaultPlay.reason),
+  `early-low play block should note "too early for kids", got: ${earlyDefaultPlay.reason}`,
+);
+
+// With latestEnd = 12:00, May 17's daylight good window (~9:08 AM – 6:39
+// PM) is clipped to 9:08 AM – 12:00 PM — still ~2.9 h, so the block
+// remains, just trimmed. It must not run past noon.
+const dayWithEarlyCap = optimizeDaySchedule({
+  day: day17,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-17", highF: 82, lowF: 65, precipChancePct: 20, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+  pace: { earliestStart: "08:30", latestEnd: "12:00", kidsAge: "littleKids" },
+});
+const earlyCapPlay = dayWithEarlyCap.blocks.find((b) => b.kind === "tide");
+assert.ok(
+  earlyCapPlay,
+  "morning beach window still recommended when latestEnd cuts the day at noon",
+);
+const noonMs = Date.UTC(2026, 4, 17, 12, 0);
+assert.ok(
+  earlyCapPlay.end.getTime() <= noonMs,
+  `play block must end at/before 12:00, got ${earlyCapPlay.end.toISOString()}`,
+);
+
+// But if the family window is genuinely tiny (latestEnd 09:30 with the
+// default 08:30 earliestStart), the May 17 morning beach window 9:08 AM –
+// 9:30 AM is only ~22 min, which falls below the 45-min floor and is
+// dropped.
+const dayWithTinyCap = optimizeDaySchedule({
+  day: day17,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-17", highF: 82, lowF: 65, precipChancePct: 20, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+  pace: { earliestStart: "08:30", latestEnd: "09:30", kidsAge: "littleKids" },
+});
+const tinyCapPlay = dayWithTinyCap.blocks.find((b) => b.kind === "tide");
+assert.equal(
+  tinyCapPlay,
+  undefined,
+  "play block dropped when the remaining family window is under 45 min",
+);
+console.log("✓ household pace clipping");
+
+// --- 9. good-beach windows (away from high tide) ---------------------------
+const { goodBeachWindows } = await import("../src/utils/tideUtils");
+// May 17 highs are 7:38 AM and 8:09 PM, so the ±90-min bad bands are
+// 06:08–09:08 AM and 06:39–09:39 PM. The single daylight good window
+// should land between them.
+const may17Plan = optDays.find((d) => d.date === "2026-05-17");
+const may17Windows = goodBeachWindows(may17Plan, sunTimes("2026-05-17"), 90);
+assert.equal(may17Windows.length, 1, "May 17 has exactly one good beach window");
+const w0 = may17Windows[0];
+assert.equal(formatClock(w0.start), "9:08 AM", `good window starts at 9:08 AM, got ${formatClock(w0.start)}`);
+const setH = w0.end.getUTCHours();
+const setM = w0.end.getUTCMinutes();
+assert.ok(
+  setH < 19 || (setH === 18 && setM <= 39),
+  `good window ends before/at 6:39 PM, got ${formatClock(w0.end)}`,
+);
+assert.ok(w0.tide, "1:51 PM low falls inside the good window — anchor low set");
+assert.equal(w0.tide.time, "13:51", "anchor low is the 1:51 PM low");
+
+// Days with no daylight low still produce a good beach window — high tide
+// is still the constraint, not "is there a low?".
+const onlyNightLowDay = {
+  date: "2026-06-01",
+  label: "Monday, June 1",
+  tides: [
+    { time: "02:30", displayTime: "2:30 AM", type: "Low", heightFt: -0.1 },
+    { time: "09:00", displayTime: "9:00 AM", type: "High", heightFt: 5.8 },
+    { time: "15:00", displayTime: "3:00 PM", type: "Low", heightFt: 0.2 },
+    { time: "21:30", displayTime: "9:30 PM", type: "High", heightFt: 6.0 },
+  ],
+};
+const juneSun = sunTimes("2026-06-01");
+const juneWindows = goodBeachWindows(onlyNightLowDay, juneSun, 90);
+// Highs 09:00 and 21:30 → bad bands 07:30–10:30 and 20:00–23:00.
+// Daylight ~5:20 AM – 8:30 PM yields: 5:20–7:30, 10:30–8:30 PM (the 8:30 PM
+// sunset is inside the 20:00–23:00 bad band, so this end clips), so we
+// expect at least one window of ≥ 45 min plus the early-morning slice.
+assert.ok(juneWindows.length >= 1, "good windows exist even with a nighttime low");
+assert.ok(
+  juneWindows.some((w) => w.tide && w.tide.time === "15:00"),
+  "the 3:00 PM low sits inside one of the good windows as its anchor",
+);
+console.log("✓ good beach windows");
 
 console.log("\nAll smoke tests passed.");
