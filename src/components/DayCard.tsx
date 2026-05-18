@@ -13,19 +13,23 @@ import { RecommendationBadge } from "./RecommendationBadge";
 import { TideChart } from "./TideChart";
 import { WeatherSummary } from "./WeatherSummary";
 import { StrandScoreCard } from "./StrandScoreCard";
+import { FamilyScheduleCard } from "./FamilyScheduleCard";
 import { scoreStrandDay } from "../utils/strandScore";
+import { optimizeDaySchedule } from "../utils/scheduleOptimizer";
 import type { DayWeather } from "../utils/runtimeWeather";
+import type { AccessSettings } from "../hooks/useAccessSettings";
 
 type Props = {
   day: DayPlan;
   allDays: DayPlan[];
   nap: NapSettings;
   weather?: DayWeather;
+  access: AccessSettings;
   now?: Date;
   isToday?: boolean;
 };
 
-export function DayCard({ day, allDays, nap, weather, now, isToday }: Props) {
+export function DayCard({ day, allDays, nap, weather, access, now, isToday }: Props) {
   const lows = day.tides.filter((t) => t.type === "Low");
   const highs = day.tides.filter((t) => t.type === "High");
   const napRange = napInterval(day.date, nap);
@@ -41,6 +45,14 @@ export function DayCard({ day, allDays, nap, weather, now, isToday }: Props) {
     playWindows.length > 0 && playWindows.every((w) => conflictsWithNap(w, napRange));
 
   const strand = scoreStrandDay(day, weather);
+  const schedule = optimizeDaySchedule({
+    day,
+    allDays,
+    nap,
+    weather,
+    access,
+    now,
+  });
 
   return (
     <article
@@ -135,6 +147,8 @@ export function DayCard({ day, allDays, nap, weather, now, isToday }: Props) {
 
         <StrandScoreCard score={strand} />
       </div>
+
+      <FamilyScheduleCard schedule={schedule} />
 
       {day.notes && day.notes.length > 0 && (
         <ul className="day-notes">

@@ -6,14 +6,18 @@ import {
   dateISOOf,
   nowInStationTZ,
 } from "./utils/tideUtils";
+import { optimizeDaySchedule, pickBestDays } from "./utils/scheduleOptimizer";
 import { Header } from "./components/Header";
 import { NapSettingsCard } from "./components/NapSettings";
+import { AccessSettingsCard } from "./components/AccessSettings";
+import { BestDaySummary } from "./components/BestDaySummary";
 import { DayCard } from "./components/DayCard";
 import { StrandFeedingPanel } from "./components/StrandFeedingPanel";
 import { WeekOverview } from "./components/WeekOverview";
 import { TripStatus } from "./components/TripStatus";
 import { DayNav } from "./components/DayNav";
 import { DateRangePicker } from "./components/DateRangePicker";
+import { useAccessSettings } from "./hooks/useAccessSettings";
 import { useDateRange } from "./hooks/useDateRange";
 import { useTideDays } from "./hooks/useTideDays";
 import { useWeather } from "./hooks/useWeather";
@@ -85,6 +89,36 @@ export default function App() {
     fetchedCoverage,
   } = useTideDays(range);
   const weather = useWeather();
+  const [access, setAccess] = useAccessSettings();
+
+  const bestDays = useMemo(() => {
+    if (days.length === 0) return {};
+    const schedules = days.map((d) =>
+      optimizeDaySchedule({
+        day: d,
+        allDays: days,
+        nap,
+        weather: weather.byDate.get(d.date),
+        access,
+        now,
+      }),
+    );
+    // For the "best public-only day" pick, score a parallel set of schedules
+    // computed as if preferPublicOnly were on — fallback list length alone is
+    // a fixed-size set and not informative.
+    const publicOnlyAccess = { ...access, preferPublicOnly: true };
+    const publicOnly = days.map((d) =>
+      optimizeDaySchedule({
+        day: d,
+        allDays: days,
+        nap,
+        weather: weather.byDate.get(d.date),
+        access: publicOnlyAccess,
+        now,
+      }),
+    );
+    return pickBestDays(schedules, publicOnly);
+  }, [days, nap, weather.byDate, access, now]);
 
   useEffect(() => {
     try {
@@ -158,7 +192,11 @@ export default function App() {
 
         <DayNav days={days} todayISO={todayISO} />
 
+        <BestDaySummary best={bestDays} onJump={scrollToDay} />
+
         <NapSettingsCard value={nap} onChange={setNap} />
+
+        <AccessSettingsCard value={access} onChange={setAccess} />
 
         <section aria-labelledby="days-heading">
           <h2 id="days-heading" className="section-title">
@@ -172,6 +210,7 @@ export default function App() {
                 allDays={days}
                 nap={nap}
                 weather={weather.byDate.get(day.date)}
+                access={access}
                 now={now}
                 isToday={day.date === todayISO}
               />
