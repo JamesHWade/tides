@@ -139,6 +139,14 @@ export default function App() {
   }, []);
 
   const todayISO = dateInRangeISO(now, range.startISO, range.endISO);
+  const todayDay = useMemo(
+    () => (todayISO ? days.find((d) => d.date === todayISO) ?? null : null),
+    [days, todayISO],
+  );
+  const otherDays = useMemo(
+    () => days.filter((d) => d.date !== todayISO),
+    [days, todayISO],
+  );
   const titleRange = useMemo(
     () => rangeLabel(range.startISO, range.endISO),
     [range.startISO, range.endISO],
@@ -169,6 +177,21 @@ export default function App() {
       <main className="container">
         <TripStatus days={days} now={now} range={range} />
 
+        {todayDay && (
+          <section className="today-section" aria-label="Today">
+            <DayCard
+              day={todayDay}
+              allDays={days}
+              nap={nap}
+              pace={pace}
+              weather={weather.byDate.get(todayDay.date)}
+              access={access}
+              now={now}
+              isToday
+            />
+          </section>
+        )}
+
         <DateRangePicker
           value={range}
           isTrip={range.isTrip}
@@ -197,11 +220,6 @@ export default function App() {
 
         <DayNav days={days} todayISO={todayISO} />
 
-        <p className="bonus-divider">
-          <span>Bonus planning layer</span> — tides &amp; weather are the
-          primary product; tune the rest below.
-        </p>
-
         <BestDaySummary best={bestDays} onJump={scrollToDay} />
 
         <WildlifeSeasonCard startISO={range.startISO} endISO={range.endISO} />
@@ -215,26 +233,28 @@ export default function App() {
 
         <AccessSettingsCard value={access} onChange={setAccess} />
 
-        <section aria-labelledby="days-heading">
-          <h2 id="days-heading" className="section-title">
-            Daily tide plan · {titleRange}
-          </h2>
-          <div className="day-grid">
-            {days.map((day) => (
-              <DayCard
-                key={day.date}
-                day={day}
-                allDays={days}
-                nap={nap}
-                pace={pace}
-                weather={weather.byDate.get(day.date)}
-                access={access}
-                now={now}
-                isToday={day.date === todayISO}
-              />
-            ))}
-          </div>
-        </section>
+        {otherDays.length > 0 && (
+          <section aria-labelledby="days-heading">
+            <h2 id="days-heading" className="section-title">
+              Daily tide plan · {titleRange}
+            </h2>
+            <div className="day-grid">
+              {otherDays.map((day) => (
+                <DayCard
+                  key={day.date}
+                  day={day}
+                  allDays={days}
+                  nap={nap}
+                  pace={pace}
+                  weather={weather.byDate.get(day.date)}
+                  access={access}
+                  now={now}
+                  isToday={false}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         <StrandFeedingPanel />
 

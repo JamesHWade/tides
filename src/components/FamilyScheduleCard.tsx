@@ -35,7 +35,7 @@ export function FamilyScheduleCard({ schedule }: Props) {
     <details className="schedule-card" aria-label="Family schedule">
       <summary className="schedule-card__summary">
         <div className="schedule-card__head">
-          <strong className="schedule-card__title">Bonus: a plan for the day</strong>
+          <strong className="schedule-card__title">Plan for the day</strong>
           <span className="schedule-card__headline">{schedule.headline}</span>
         </div>
         {/* Label flips between "Show" / "Hide" via CSS on the parent

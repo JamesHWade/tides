@@ -5,8 +5,7 @@ export function StrandFeedingPanel() {
         <h2 id="strand-heading">🐬 Watching for strand feeding</h2>
         <p className="card-sub">
           Strand feeding is a rare cooperative-hunting behavior the Kiawah-River
-          dolphins use against fish like mullet. Each day card scores observation
-          conditions; this card is the user manual.
+          dolphins use against fish like mullet.
         </p>
       </div>
 
@@ -67,8 +66,7 @@ export function StrandFeedingPanel() {
       <p className="wildlife-footnote">
         Sources: Petricig 1995 (URI dissertation), Duffy-Echevarria et al. 2008
         (Marine Mammal Science), NOAA Fisheries, LMMN. Wind and rain inputs in
-        the score are observer-comfort heuristics, not biology — encoded
-        accordingly.
+        the score are observer-comfort heuristics, not biology.
       </p>
     </section>
   );
