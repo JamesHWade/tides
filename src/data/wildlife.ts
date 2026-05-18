@@ -209,8 +209,12 @@ const MONTH_LABELS = [
   "December",
 ];
 
+// Preserve the iteration order of the Set (which is insertion order). The
+// caller — `monthsInRange` — walks the trip day-by-day, so a Dec 28–Jan 3
+// range arrives as {12, 1}, and we want "December & January", not the
+// numerically sorted "January & December".
 export function describeMonths(months: ReadonlySet<number>): string {
-  const arr = [...months].sort((a, b) => a - b);
+  const arr = [...months];
   if (arr.length === 0) return "";
   if (arr.length === 1) return MONTH_LABELS[arr[0] - 1];
   const labels = arr.map((m) => MONTH_LABELS[m - 1]);

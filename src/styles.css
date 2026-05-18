@@ -1823,6 +1823,14 @@ a {
   white-space: nowrap;
 }
 
+.schedule-card[open] .schedule-card__toggle::before {
+  content: "Hide schedule";
+}
+
+.schedule-card:not([open]) .schedule-card__toggle::before {
+  content: "Show schedule";
+}
+
 .schedule-card[open] .schedule-card__toggle::after {
   content: " ▴";
 }
@@ -1837,5 +1845,262 @@ a {
     animation-duration: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0s !important;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   Dark mode
+   ----------------------------------------------------------------------
+
+   Triggered by the OS / browser preference. Keeps the same hue family
+   (sand + sea + coral accents) but inverts surface lightness — sand
+   becomes deep blue-charcoal, cards become semi-translucent dark, ink
+   becomes near-white. Tide chart, week overview, and trip status keep
+   their gradients (they already read well on dark) but get a small
+   contrast bump.
+   ---------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --sand-50: #0e1a22;
+    --sand-100: #15252f;
+    --sand-200: #1f3340;
+    --sea-50: #11252e;
+    --sea-100: #173040;
+    --sea-200: #25526b;
+    --sea-400: #58b8d2;
+    --sea-600: #8fd0e2;
+    --sea-700: #b7e1ec;
+    --sea-900: #d8eef4;
+    --coral: #ff9078;
+    --sun: #ffd56e;
+    --kelp: #6dc8a4;
+    --ink: #e8f0f4;
+    --muted: #92a8b3;
+    --warn-bg: #3a2d05;
+    --warn-border: #b78f2c;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
+  }
+
+  html,
+  body {
+    background: var(--sand-50);
+    color: var(--ink);
+  }
+
+  body {
+    background:
+      radial-gradient(900px 500px at 80% -10%, rgba(255, 200, 87, 0.10), transparent 60%),
+      radial-gradient(800px 500px at -10% 10%, rgba(79, 176, 201, 0.12), transparent 60%),
+      radial-gradient(600px 600px at 50% 110%, rgba(124, 196, 226, 0.08), transparent 60%),
+      var(--sand-50);
+  }
+
+  a {
+    color: var(--sea-600);
+  }
+
+  /* Hero: dim the gradient and re-tone text/notes for dark surfaces. */
+  .hero {
+    background:
+      radial-gradient(800px 320px at 90% 0%, rgba(255, 200, 87, 0.20), transparent 60%),
+      linear-gradient(160deg, #1a3a4a 0%, #2a5e75 55%, #11425a 100%);
+    color: var(--sea-900);
+  }
+  .hero h1 {
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  }
+  .hero .subtitle,
+  .hero-note,
+  .eyebrow {
+    color: var(--sea-700);
+  }
+  .hero-warning {
+    color: #ffe7b0;
+  }
+  .hero-warning a {
+    color: #ffe7b0;
+  }
+
+  /* Cards become translucent over the dark background. */
+  .card {
+    background: rgba(20, 36, 46, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .card-head h2,
+  .section-title {
+    color: var(--sea-700);
+  }
+
+  /* Week overview keeps its dark color but bumps contrast. */
+  .week-overview {
+    background: linear-gradient(180deg, #0e2330 0%, #122a3a 100%);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+  .week-overview__day-sep {
+    border-left-color: rgba(255, 255, 255, 0.10);
+  }
+
+  /* Tide chart sits over the dark surface — keep the gradient legible
+     but pulled back from the bright daytime palette. */
+  .tide-chart__plot-wrap {
+    background: linear-gradient(180deg, #4c3a1a 0%, #1c3a48 55%, #112a36 100%);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  /* Form controls: lift over the card surface, drop the bright cyan fill. */
+  .nap-fields input[type="time"],
+  .nap-fields select,
+  .access-base select,
+  .range-fields input[type="date"] {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--ink);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+  .access-group {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.10);
+  }
+  .range-card__reset,
+  .range-fields__shifts button,
+  .access-summary__edit {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--sea-700);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+  .range-card__reset:hover,
+  .range-fields__shifts button:hover,
+  .access-summary__edit:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Tide chips: keep their tint, but on top of dark cards. */
+  .tide-chip {
+    background: rgba(79, 176, 201, 0.10);
+    color: var(--sea-700);
+    border-color: rgba(79, 176, 201, 0.25);
+  }
+  .tide-chip.tide-high {
+    background: rgba(79, 176, 201, 0.18);
+    border-color: rgba(79, 176, 201, 0.35);
+  }
+  .tide-chip.tide-low {
+    background: rgba(255, 200, 87, 0.16);
+    border-color: rgba(255, 200, 87, 0.4);
+    color: #ffd87a;
+  }
+
+  /* Window items (low-tide play card): warm dark instead of the sand gradient. */
+  .window-item {
+    background: linear-gradient(180deg, #1d2a1c 0%, #233520 100%);
+    border-color: rgba(255, 200, 87, 0.18);
+  }
+
+  /* Weather summary panel. */
+  .weather-summary {
+    background: linear-gradient(180deg, #112835 0%, #143040 100%);
+    border-color: rgba(79, 176, 201, 0.18);
+  }
+
+  /* Badges keep their hue but want a higher-contrast text color. */
+  .badge-play {
+    color: #8fdfba;
+    background: rgba(43, 138, 111, 0.18);
+    border-color: rgba(43, 138, 111, 0.35);
+  }
+  .badge-conflict {
+    color: #ffb2a7;
+    background: rgba(176, 58, 46, 0.18);
+    border-color: rgba(176, 58, 46, 0.40);
+  }
+  .badge-calm {
+    color: #b7e1ec;
+    background: rgba(79, 176, 201, 0.16);
+    border-color: rgba(79, 176, 201, 0.32);
+  }
+  .badge-info {
+    color: #ffd87a;
+    background: rgba(255, 200, 87, 0.14);
+    border-color: rgba(255, 200, 87, 0.34);
+  }
+
+  /* Day nav: lift the sticky surface from sand to dark slate. */
+  .day-nav {
+    background: linear-gradient(180deg, rgba(14, 26, 34, 0.95) 0%, rgba(14, 26, 34, 0.78) 100%);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  .day-nav__chip {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--sea-700);
+    border-color: rgba(255, 255, 255, 0.10);
+  }
+
+  /* Strand-score card variants. */
+  .strand-score--favorable {
+    background: linear-gradient(180deg, #14301d 0%, #1b3f25 100%);
+    border-color: rgba(109, 200, 164, 0.4);
+  }
+  .strand-score--marginal {
+    background: linear-gradient(180deg, #2f2810 0%, #3a3014 100%);
+    border-color: rgba(255, 213, 110, 0.45);
+  }
+  .strand-score--unfavorable {
+    background: linear-gradient(180deg, #1e2730 0%, #242d36 100%);
+    border-color: rgba(146, 168, 179, 0.30);
+  }
+
+  /* Schedule card variants. */
+  .schedule-card {
+    background: linear-gradient(180deg, #112430 0%, #163040 100%);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .schedule-block {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .schedule-block--fixed {
+    background: rgba(255, 255, 255, 0.025);
+  }
+  .schedule-block--tide {
+    background: rgba(255, 200, 87, 0.08);
+  }
+  .schedule-block--strand {
+    background: rgba(43, 138, 111, 0.10);
+  }
+  .schedule-block--fallback {
+    background: rgba(255, 126, 107, 0.08);
+  }
+  .schedule-block__warn {
+    color: #ffd87a;
+  }
+
+  /* Wildlife season card retains its accent line, dark surface. */
+  .wildlife-season-card {
+    background: linear-gradient(180deg, #112a22 0%, #15332a 100%);
+  }
+  .wildlife-season-item {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(109, 200, 164, 0.20);
+  }
+
+  /* Access summary chips. */
+  .access-summary__chip {
+    background: rgba(79, 176, 201, 0.14);
+    color: var(--sea-700);
+    border-color: rgba(79, 176, 201, 0.32);
+  }
+  .access-summary__edit--collapse {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  /* Best day pick buttons. */
+  .best-day-summary {
+    background: linear-gradient(180deg, #122430 0%, #16313e 100%);
+  }
+  .best-day-pick {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--ink);
+    border-color: rgba(255, 255, 255, 0.10);
   }
 }

@@ -1,37 +1,19 @@
 import { useEffect, useState } from "react";
+import {
+  DEFAULT_PACE,
+  KIDS_AGE_GROUPS,
+  type HouseholdPace,
+  type KidsAgeGroup,
+} from "../utils/householdPace";
+
+// Re-export so existing component imports keep working without a churn diff.
+export { DEFAULT_PACE } from "../utils/householdPace";
+export type { HouseholdPace, KidsAgeGroup } from "../utils/householdPace";
 
 const STORAGE_KEY = "tides.pace.v1";
 
-export type KidsAgeGroup = "toddlers" | "littleKids" | "olderKids" | "mixed";
-
-export type HouseholdPace = {
-  /** Earliest realistic "out the door" time, 24h HH:MM. */
-  earliestStart: string;
-  /** Latest realistic evening end time, 24h HH:MM. */
-  latestEnd: string;
-  /**
-   * Age band of the kids in the trip. Lets the scheduler down-rank or hide
-   * plans aimed at the wrong band (a toddler doesn't want a tennis lesson;
-   * older kids don't need the splash zone).
-   */
-  kidsAge: KidsAgeGroup;
-};
-
-export const DEFAULT_PACE: HouseholdPace = {
-  earliestStart: "08:30",
-  latestEnd: "19:30",
-  kidsAge: "littleKids",
-};
-
-const AGE_GROUPS: ReadonlyArray<KidsAgeGroup> = [
-  "toddlers",
-  "littleKids",
-  "olderKids",
-  "mixed",
-];
-
 function isKidsAge(v: unknown): v is KidsAgeGroup {
-  return typeof v === "string" && (AGE_GROUPS as readonly string[]).includes(v);
+  return typeof v === "string" && (KIDS_AGE_GROUPS as readonly string[]).includes(v);
 }
 
 function isHHMM(v: unknown): v is string {

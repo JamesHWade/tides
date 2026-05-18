@@ -38,8 +38,12 @@ export function FamilyScheduleCard({ schedule }: Props) {
           <strong className="schedule-card__title">Bonus: a plan for the day</strong>
           <span className="schedule-card__headline">{schedule.headline}</span>
         </div>
-        <span className="schedule-card__toggle" aria-hidden="true">
-          Show schedule
+        {/* Label flips between "Show" / "Hide" via CSS on the parent
+            <details> [open] state — keeps the text and the action in sync
+            without React having to listen for toggle events. */}
+        <span className="schedule-card__toggle" aria-hidden="true" />
+        <span className="visually-hidden">
+          Toggle schedule details
         </span>
       </summary>
 

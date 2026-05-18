@@ -197,14 +197,14 @@ export default function App() {
 
         <DayNav days={days} todayISO={todayISO} />
 
-        <WildlifeSeasonCard startISO={range.startISO} endISO={range.endISO} />
-
         <p className="bonus-divider">
           <span>Bonus planning layer</span> — tides &amp; weather are the
           primary product; tune the rest below.
         </p>
 
         <BestDaySummary best={bestDays} onJump={scrollToDay} />
+
+        <WildlifeSeasonCard startISO={range.startISO} endISO={range.endISO} />
 
         <NapSettingsCard
           nap={nap}

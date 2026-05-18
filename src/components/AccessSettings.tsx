@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AccessSettings } from "../hooks/useAccessSettings";
 
 type Props = {
@@ -94,10 +94,20 @@ function activeFlagLabels(v: AccessSettings): string[] {
 
 export function AccessSettingsCard({ value, onChange }: Props) {
   const configured = useMemo(() => isConfigured(value), [value]);
-  // Collapsed by default once anything is configured. From there the user
-  // drives open/close with the Edit / Hide buttons — we don't auto-collapse
-  // mid-edit when a checkbox flips.
+  // Open by default for a brand-new visitor (nothing configured). When the
+  // user makes their first selection — flipping `configured` from false to
+  // true — auto-collapse into the chip summary, matching the documented
+  // "set it once" UX. After that, the user drives open/close via Edit /
+  // Hide; we don't auto-collapse mid-edit when individual checkboxes flip.
   const [open, setOpen] = useState<boolean>(!configured);
+  const wasConfiguredRef = useRef<boolean>(configured);
+
+  useEffect(() => {
+    if (!wasConfiguredRef.current && configured) {
+      setOpen(false);
+    }
+    wasConfiguredRef.current = configured;
+  }, [configured]);
 
   const update = <K extends keyof AccessSettings>(key: K, v: AccessSettings[K]) =>
     onChange({ ...value, [key]: v });

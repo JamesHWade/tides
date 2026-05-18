@@ -225,6 +225,78 @@ export function lowTidePlayWindow(
   };
 }
 
+/**
+ * Beach time isn't only good at low tide — it's bad *around* high tide. A
+ * high pushes the waterline up against the dune line, so the wet-sand strip
+ * shrinks and the surf gets pushy. Anything outside ±`padHighMin` of a high
+ * (within daylight) is workable; the time near a low is just the best of it.
+ *
+ * Returns the daylight intervals where the family can plan beach time,
+ * each one labeled with the nearest low tide so the UI can say "near the
+ * 1:51 PM low" when applicable, or just "well away from high tide" otherwise.
+ * Intervals shorter than 45 minutes are dropped.
+ */
+export function goodBeachWindows(
+  day: DayPlan,
+  daylight: { sunrise: Date; sunset: Date },
+  padHighMin = 90,
+): Window[] {
+  const highs = day.tides.filter((t) => t.type === "High");
+  const lows = day.tides.filter((t) => t.type === "Low");
+
+  // Bad bands: ±padHighMin around each high.
+  const badBands = highs.map((h) => {
+    const c = timeOn(day.date, h.time);
+    return { start: addMinutes(c, -padHighMin), end: addMinutes(c, padHighMin) };
+  });
+
+  // Start from the full daylight interval, subtract each bad band.
+  let goodBands: Array<{ start: Date; end: Date }> = [
+    { start: daylight.sunrise, end: daylight.sunset },
+  ];
+  for (const bad of badBands) {
+    const next: Array<{ start: Date; end: Date }> = [];
+    for (const g of goodBands) {
+      if (bad.end <= g.start || bad.start >= g.end) {
+        next.push(g);
+        continue;
+      }
+      if (bad.start > g.start) {
+        next.push({ start: g.start, end: bad.start });
+      }
+      if (bad.end < g.end) {
+        next.push({ start: bad.end, end: g.end });
+      }
+    }
+    goodBands = next;
+  }
+
+  const MIN_MS = 45 * 60_000;
+  return goodBands
+    .filter((b) => b.end.getTime() - b.start.getTime() >= MIN_MS)
+    .map((b) => {
+      // Find the low tide whose time falls inside this band — that's the
+      // anchor. If no low falls inside, leave tide undefined; the UI/copy
+      // can phrase it as "away from high tide" rather than "near the low".
+      const startMs = b.start.getTime();
+      const endMs = b.end.getTime();
+      let anchorLow: TideEvent | undefined;
+      for (const l of lows) {
+        const lt = timeOn(day.date, l.time).getTime();
+        if (lt >= startMs && lt <= endMs) {
+          anchorLow = l;
+          break;
+        }
+      }
+      return {
+        start: b.start,
+        end: b.end,
+        label: anchorLow ? "Good beach time (near low)" : "Good beach time",
+        tide: anchorLow,
+      };
+    });
+}
+
 export function napInterval(dateISO: string, nap: NapSettings): { start: Date; end: Date } {
   return {
     start: timeOn(dateISO, nap.napStart),
@@ -241,39 +313,40 @@ export function formatWindow(w: Window): string {
 }
 
 /**
- * Pick the best single recommendation copy for the day based on tide events
- * and the nap interval. When `daylight` is provided, nighttime lows are
- * excluded — we don't want to suggest a 3 AM beach trip just because the
- * tide is low.
+ * Pick the best single recommendation copy for the day. Beach time is good
+ * everywhere except ±90 min of high tide, so this looks at the broader
+ * `goodBeachWindows` (when `daylight` is given) rather than only the
+ * ±90-min-around-each-low strip. Without `daylight`, falls back to the
+ * legacy low-only logic for any caller that doesn't have sun times.
+ *
+ * Optional `pace` lets the day card give a more honest recommendation —
+ * a window the family can't actually use shouldn't drive the copy.
  */
 export function bestDailyRecommendation(
   day: DayPlan,
   nap: NapSettings,
   daylight?: { sunrise: Date; sunset: Date },
+  pace?: { earliestStart: string; latestEnd: string },
 ): string {
   const naps = napInterval(day.date, nap);
   const lows = day.tides.filter((t) => t.type === "Low");
-  if (lows.length === 0) {
-    return "No low tide today at this station — plan around the high tides and use a quieter beach access.";
+  const highs = day.tides.filter((t) => t.type === "High");
+  if (lows.length === 0 && highs.length === 0) {
+    return "No tide data for today at this station.";
   }
 
-  const windows = lows
-    .map((l) => ({
+  if (!daylight) {
+    if (lows.length === 0) {
+      return "No low tide today at this station — plan around the high tides and use a quieter beach access.";
+    }
+    const fallbackWindows = lows.map((l) => ({
       low: l,
-      win: daylight ? lowTidePlayWindow(day, l, 90, daylight) : lowTidePlayWindow(day, l, 90),
-    }))
-    .filter((x): x is { low: TideEvent; win: Window } => x.win != null);
-
-  if (windows.length === 0) {
-    return "All low tides today fall outside daylight — plan a high-tide swim or sand-castle session instead.";
-  }
-
-  const nonConflicting = windows.filter(({ win }) => !conflictsWithNap(win, naps));
-
-  if (nonConflicting.length > 0) {
-    // Prefer the earliest non-conflicting window, then a time-of-day hint
-    // keyed off the (possibly clipped) window start so a sunrise-clipped
-    // window still reads as "morning".
+      win: lowTidePlayWindow(day, l, 90),
+    }));
+    const nonConflicting = fallbackWindows.filter(({ win }) => !conflictsWithNap(win, naps));
+    if (nonConflicting.length === 0) {
+      return "All daylight low tides overlap nap today — consider a short morning beach visit or a late-afternoon shell walk.";
+    }
     const pick = nonConflicting.sort((a, b) => a.win.start.getTime() - b.win.start.getTime())[0];
     const hour = pick.win.start.getUTCHours();
     if (hour < 11) return "Best with kids: morning beach play before nap.";
@@ -281,5 +354,115 @@ export function bestDailyRecommendation(
     return "Late afternoon low — good for a pre-dinner shell walk.";
   }
 
-  return "All daylight low tides overlap nap today — consider a short morning beach visit or a late-afternoon shell walk.";
+  let windows = goodBeachWindows(day, daylight);
+  if (pace) {
+    const familyStart = timeOn(day.date, pace.earliestStart);
+    const familyEnd = timeOn(day.date, pace.latestEnd);
+    windows = clipWindowsToFamilyHours(windows, familyStart, familyEnd);
+  }
+
+  // Split each window around the nap (instead of treating any overlap as a
+  // conflict). A 9 AM–6 PM good window with a 1–3 PM nap should still
+  // recommend an afternoon plan, not an "overlaps nap" punt.
+  const usable = splitWindowsAroundNap(windows, naps);
+  const hasDaylightLow = lows.some((l) => {
+    const t = timeOn(day.date, l.time);
+    return t >= daylight.sunrise && t <= daylight.sunset;
+  });
+
+  if (usable.length === 0) {
+    // Two distinct failure modes — windows existed but nap ate them, or
+    // the highs pinned the wet-sand strip all daylight.
+    if (windows.length > 0) {
+      return "Today's good beach windows overlap nap — keep beach time short on either side.";
+    }
+    return "Surf is up against the dunes most of today — plan a pool, indoor stop, or a quick wading visit.";
+  }
+
+  // Prefer a window with a daylight low anchor; otherwise pick the earliest.
+  const anchored = usable.filter((w) => w.tide != null);
+  const pick = anchored.length > 0
+    ? anchored.sort((a, b) => a.start.getTime() - b.start.getTime())[0]
+    : usable.sort((a, b) => a.start.getTime() - b.start.getTime())[0];
+
+  // Time-of-day cue tracks the anchor low when present, so a 10:30–6:30
+  // post-nap window anchored to the 1:51 PM low reads as "afternoon".
+  const refTime = pick.tide ? timeOn(day.date, pick.tide.time) : pick.start;
+  const hour = refTime.getUTCHours();
+  const nearLow = pick.tide != null;
+
+  if (!hasDaylightLow) {
+    return "All lows are outside daylight today — water stays on the higher side, but you've got workable beach time between the highs.";
+  }
+
+  if (hour < 11) {
+    return nearLow
+      ? "Morning beach window lines up with the low — flat sand and shallow pools."
+      : "Morning beach is workable — well away from high tide.";
+  }
+  if (hour < 17) {
+    return nearLow
+      ? "Afternoon low gives you the day's best beach window."
+      : "Afternoon beach is open — high tide is well clear.";
+  }
+  return nearLow
+    ? "Late-day low — great for a pre-dinner shell walk."
+    : "Late-day beach time is workable until sunset.";
 }
+
+/**
+ * Trim each window against the family's earliest/latest. Drops anything
+ * shorter than 45 min after the clip. Clears the anchor `tide` if the
+ * low's center no longer falls inside the trimmed segment, so downstream
+ * "near low" copy doesn't claim an anchor the family can't actually reach.
+ */
+function clipWindowsToFamilyHours(
+  windows: Window[],
+  familyStart: Date,
+  familyEnd: Date,
+): Window[] {
+  const MIN_MS = 45 * 60_000;
+  const out: Window[] = [];
+  for (const w of windows) {
+    if (w.end <= familyStart || w.start >= familyEnd) continue;
+    const s = w.start < familyStart ? familyStart : w.start;
+    const e = w.end > familyEnd ? familyEnd : w.end;
+    if (e.getTime() - s.getTime() < MIN_MS) continue;
+    out.push(rebuildWindow(w, s, e));
+  }
+  return out;
+}
+
+function splitWindowsAroundNap(
+  windows: Window[],
+  nap: { start: Date; end: Date },
+): Window[] {
+  const MIN_MS = 45 * 60_000;
+  const out: Window[] = [];
+  for (const w of windows) {
+    if (!windowsOverlap(w.start, w.end, nap.start, nap.end)) {
+      out.push(w);
+      continue;
+    }
+    if (nap.start > w.start) out.push(rebuildWindow(w, w.start, nap.start));
+    if (nap.end < w.end) out.push(rebuildWindow(w, nap.end, w.end));
+  }
+  return out.filter((w) => w.end.getTime() - w.start.getTime() >= MIN_MS);
+}
+
+function rebuildWindow(w: Window, start: Date, end: Date): Window {
+  const tideStillInside = (() => {
+    if (!w.tide) return false;
+    const dayISO = dateISOOf(w.start);
+    const center = timeOn(dayISO, w.tide.time);
+    return center >= start && center <= end;
+  })();
+  return {
+    ...w,
+    start,
+    end,
+    tide: tideStillInside ? w.tide : undefined,
+  };
+}
+
+export { clipWindowsToFamilyHours };

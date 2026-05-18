@@ -10,14 +10,16 @@ import type { DayPlan } from "../data/tides";
 import type { Activity } from "../data/activities";
 import { ACTIVITIES } from "../data/activities";
 import type { AccessSettings } from "../hooks/useAccessSettings";
-import type { HouseholdPace, KidsAgeGroup } from "../hooks/useHouseholdPace";
-import { DEFAULT_PACE } from "../hooks/useHouseholdPace";
+import {
+  DEFAULT_PACE,
+  type HouseholdPace,
+  type KidsAgeGroup,
+} from "./householdPace";
 import type { DayWeather } from "./runtimeWeather";
 import {
   addMinutes,
-  conflictsWithNap,
   formatClock,
-  lowTidePlayWindow,
+  goodBeachWindows,
   napInterval,
   timeOn,
   windowsOverlap,
@@ -336,17 +338,17 @@ function isTravelNote(notes: string[] | undefined): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Trim a strand window against the nap interval. Returns the largest
- * remaining contiguous piece, or null if it's < 60 minutes.
- *
- * Nap fully inside the window splits it into two pieces — we keep the longer.
+ * Trim a window against the nap interval. Returns every remaining
+ * contiguous piece (≥ 60 min), sorted longest-first. Nap fully inside the
+ * window produces two pieces; nap at one end produces one. The caller is
+ * responsible for any further clipping (e.g. family hours) before picking.
  */
 function trimAgainstNap(
   win: { start: Date; end: Date },
   nap: { start: Date; end: Date },
-): { start: Date; end: Date } | null {
+): Array<{ start: Date; end: Date }> {
   if (!windowsOverlap(win.start, win.end, nap.start, nap.end)) {
-    return win;
+    return [win];
   }
   const candidates: Array<{ start: Date; end: Date }> = [];
   if (nap.start > win.start) {
@@ -355,13 +357,12 @@ function trimAgainstNap(
   if (nap.end < win.end) {
     candidates.push({ start: nap.end, end: win.end });
   }
-  candidates.sort(
-    (a, b) => b.end.getTime() - b.start.getTime() - (a.end.getTime() - a.start.getTime()),
-  );
-  const best = candidates[0];
-  if (!best) return null;
-  if (best.end.getTime() - best.start.getTime() < 60 * 60_000) return null;
-  return best;
+  return candidates
+    .filter((c) => c.end.getTime() - c.start.getTime() >= 60 * 60_000)
+    .sort(
+      (a, b) =>
+        b.end.getTime() - b.start.getTime() - (a.end.getTime() - a.start.getTime()),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -419,6 +420,28 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     return { start: s, end: e };
   };
 
+  // Pick the best remaining nap-trimmed + family-clipped segment from a raw
+  // window. Considers every piece left after the nap split, not just the
+  // largest — a short pre-nap segment that survives the family clip is
+  // better than a long post-nap segment that doesn't.
+  const pickBestPacedSegment = (
+    raw: { start: Date; end: Date },
+  ): { start: Date; end: Date } | null => {
+    const segments = trimAgainstNap(raw, naps);
+    let best: { start: Date; end: Date } | null = null;
+    let bestLen = 0;
+    for (const seg of segments) {
+      const paced = clipToFamilyHours(seg);
+      if (!paced) continue;
+      const len = paced.end.getTime() - paced.start.getTime();
+      if (len > bestLen) {
+        best = paced;
+        bestLen = len;
+      }
+    }
+    return best;
+  };
+
   // 3. Strand block. Skip on thunderstorm days.
   let strandBlock: ScheduleBlock | null = null;
   let usedStrandLowTime: string | null = null;
@@ -427,8 +450,7 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     mood !== "thunder" &&
     (strand.rating === "favorable" || strand.rating === "marginal")
   ) {
-    const trimmed = trimAgainstNap(strand.bestWindow, naps);
-    const pacedStrand = trimmed ? clipToFamilyHours(trimmed) : null;
+    const pacedStrand = pickBestPacedSegment(strand.bestWindow);
     if (pacedStrand) {
       strandBlock = {
         id: `strand-${day.date}`,
@@ -444,89 +466,111 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     }
   }
 
-  // 4. Beach-play block on a daylight low (skip duplicate if strand block
-  // already occupies the same low). Each candidate is also clipped to the
-  // family's "out the door" → "evening done" window — a 6:15 AM low isn't a
-  // useful recommendation if the kids can't be out before 8:30.
-  const lows = day.tides.filter((t) => t.type === "Low");
-  const playWindows: Array<{
-    win: Window;
-    lowTime: string;
+  // 4. Beach-play block. Beach time is good anywhere except ±90 min of high
+  // tide; the time near a low is just the best of it. Each candidate window
+  // is nap-trimmed, family-clipped, and ranked. If a strand block already
+  // covers a window's anchor low, prefer a different window.
+  const beachWindows = goodBeachWindows(day, sun, 90);
+  type PlayCandidate = {
+    raw: Window;
     paced: { start: Date; end: Date };
-  }> = lows
-    .map((l) => {
-      const w = lowTidePlayWindow(day, l, 90, sun);
-      if (!w) return null;
-      const paced = clipToFamilyHours({ start: w.start, end: w.end });
-      if (!paced) return null;
-      return { win: w, lowTime: l.time, paced };
-    })
-    .filter(
-      (x): x is { win: Window; lowTime: string; paced: { start: Date; end: Date } } =>
-        x != null,
-    );
+    /** Whether the chosen segment still includes the low-tide moment. */
+    nearLow: boolean;
+    /** The anchor low (if any), kept even when the segment splits off. */
+    anchorLow?: typeof beachWindows[number]["tide"];
+  };
+  const playCandidates: PlayCandidate[] = [];
+  for (const w of beachWindows) {
+    const paced = pickBestPacedSegment(w);
+    if (!paced) continue;
+    const lowCenter = w.tide ? timeOn(day.date, w.tide.time).getTime() : null;
+    const nearLow =
+      lowCenter != null &&
+      lowCenter >= paced.start.getTime() &&
+      lowCenter <= paced.end.getTime();
+    playCandidates.push({ raw: w, paced, nearLow, anchorLow: w.tide });
+  }
 
-  // Pick the best daylight play window that doesn't fully collide with nap.
-  let chosenPlay:
-    | { win: Window; lowTime: string; paced: { start: Date; end: Date } }
-    | null = null;
-  for (const candidate of playWindows) {
-    if (usedStrandLowTime === candidate.lowTime) continue;
-    const paceWindow: Window = {
-      ...candidate.win,
-      start: candidate.paced.start,
-      end: candidate.paced.end,
-    };
-    if (conflictsWithNap(paceWindow, naps)) continue;
+  // Rank: prefer windows anchored on a daylight low; longer is better.
+  playCandidates.sort((a, b) => {
+    if (a.nearLow !== b.nearLow) return a.nearLow ? -1 : 1;
+    const aLen = a.paced.end.getTime() - a.paced.start.getTime();
+    const bLen = b.paced.end.getTime() - b.paced.start.getTime();
+    return bLen - aLen;
+  });
+
+  let chosenPlay: PlayCandidate | null = null;
+  for (const cand of playCandidates) {
+    if (
+      cand.anchorLow &&
+      usedStrandLowTime === cand.anchorLow.time &&
+      cand.nearLow
+    ) {
+      continue;
+    }
     if (
       strandBlock &&
       windowsOverlap(
-        paceWindow.start,
-        paceWindow.end,
+        cand.paced.start,
+        cand.paced.end,
         strandBlock.start,
         strandBlock.end,
       )
     ) {
       continue;
     }
-    chosenPlay = candidate;
+    chosenPlay = cand;
     break;
   }
   if (chosenPlay) {
-    const lowTimeMins = (() => {
-      const [h, m] = chosenPlay.win.tide?.time.split(":").map(Number) ?? [0, 0];
-      return (h ?? 0) * 60 + (m ?? 0);
-    })();
+    const low = chosenPlay.anchorLow;
+    const lowTimeMins = low
+      ? (() => {
+          const [h, m] = low.time.split(":").map(Number);
+          return (h ?? 0) * 60 + (m ?? 0);
+        })()
+      : null;
     const startMins =
       familyStart.getUTCHours() * 60 + familyStart.getUTCMinutes();
-    const earlyLow = lowTimeMins < startMins;
+    const earlyLow =
+      low != null && lowTimeMins != null && lowTimeMins < startMins;
+    const idSuffix = low ? low.time : chosenPlay.paced.start.toISOString();
+    let reason: string;
+    if (earlyLow && low) {
+      reason = `Low was at ${low.displayTime.toLowerCase()} — too early for kids, but you're well clear of high tide for a few hours after.`;
+    } else if (chosenPlay.nearLow && low) {
+      reason = `Centered on the ${low.displayTime.toLowerCase()} low (${low.heightFt.toFixed(1)} ft). Flat sand and shallow pools.`;
+    } else if (low) {
+      reason = `Tide near the ${low.displayTime.toLowerCase()} low — outside the ±90 min high-tide bands, so the wet-sand strip is workable.`;
+    } else {
+      reason = "Well away from high tide — the wet-sand strip is workable even without a nearby low.";
+    }
     blocks.push({
-      id: `play-${day.date}-${chosenPlay.lowTime}`,
-      label: "Low-tide beach play",
+      id: `play-${day.date}-${idSuffix}`,
+      label: chosenPlay.nearLow ? "Low-tide beach play" : "Beach time (away from high tide)",
       start: chosenPlay.paced.start,
       end: chosenPlay.paced.end,
       kind: "tide",
-      confidence: "high",
-      reason: earlyLow
-        ? `Low was at ${chosenPlay.win.tide?.displayTime.toLowerCase()} — too early for kids, but the sand stays walkable for a couple hours after.`
-        : `Centered on the ${chosenPlay.win.tide?.displayTime.toLowerCase()} low (${chosenPlay.win.tide?.heightFt.toFixed(1)} ft). Flat sand and shallow pools.`,
+      confidence: chosenPlay.nearLow ? "high" : "medium",
+      reason,
     });
   }
 
   // 5. Choose one allowed activity per "slot": morning and afternoon-after-nap.
-  // Slot boundaries are clipped to the family's earliestStart / latestEnd so a
-  // 6 AM "morning slot" never offers anything, and a 7:30 PM cap keeps the
-  // evening sane.
+  // Slot boundaries are clamped to the family's earliestStart / latestEnd on
+  // both sides so a 6 AM "morning slot" never offers anything, a 9 AM
+  // latestEnd doesn't leak past nap, and a 16:00 earliestStart pushes the
+  // afternoon slot forward instead of starting at 15:00.
   type Slot = { name: string; start: Date; end: Date };
   const slots: Slot[] = [
     {
       name: "morning",
       start: familyStart > naps.start ? naps.start : familyStart,
-      end: naps.start,
+      end: familyEnd < naps.start ? familyEnd : naps.start,
     },
     {
       name: "afternoon",
-      start: naps.end,
+      start: familyStart > naps.end ? familyStart : naps.end,
       end: familyEnd < naps.end ? naps.end : familyEnd,
     },
   ];
@@ -583,11 +627,17 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
   }
 
   // 6. Public fallback list — always present, anchored to the family's
-  // late-afternoon window (or clamped if their day ends earlier).
+  // late-afternoon window (or clamped if their day ends earlier). When the
+  // day is so short that `familyEnd - 90 min` would precede `familyStart`,
+  // clamp up to `familyStart` so the fallback never schedules before the
+  // family is even out the door.
   const publicFallback: ScheduleBlock[] = [];
-  const fallbackStart = familyEnd < timeOn(day.date, "16:00")
-    ? addMinutes(familyEnd, -90)
-    : timeOn(day.date, "16:00");
+  const sixteenHundred = timeOn(day.date, "16:00");
+  const fallbackStart = (() => {
+    if (familyEnd >= sixteenHundred) return sixteenHundred;
+    const candidate = addMinutes(familyEnd, -90);
+    return candidate < familyStart ? familyStart : candidate;
+  })();
   for (const id of PUBLIC_FALLBACK_IDS) {
     const a = ACTIVITIES.find((x) => x.id === id);
     if (!a) continue;
