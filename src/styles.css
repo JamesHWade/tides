@@ -1512,6 +1512,11 @@ a {
   background: rgba(255, 126, 107, 0.08);
 }
 
+.schedule-block--custom {
+  border-left-color: var(--sea-700);
+  background: rgba(31, 111, 139, 0.1);
+}
+
 .schedule-block__time {
   display: flex;
   flex-direction: column;
@@ -1734,10 +1739,65 @@ a {
   border: 1px solid rgba(43, 138, 111, 0.18);
   border-left: 4px solid var(--kelp);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wildlife-season-item__open {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.12s ease;
+}
+
+.wildlife-season-item__open:hover,
+.wildlife-season-item__open:focus-visible {
+  background: rgba(43, 138, 111, 0.08);
+  outline: none;
+}
+
+.wildlife-season-item__thumb {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--sea-50) 0%, var(--sand-100) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(43, 138, 111, 0.15);
+}
+
+.wildlife-season-item__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wildlife-season-item__thumb-fallback {
+  font-size: 2.4rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.wildlife-season-item__body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .wildlife-season-item__head {
@@ -1749,7 +1809,7 @@ a {
 }
 
 .wildlife-season-item__emoji {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   line-height: 1;
 }
 
@@ -1758,23 +1818,420 @@ a {
   font-size: 0.9rem;
   line-height: 1.45;
   color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .wildlife-season-item__where {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.wildlife-season-item__more {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--kelp);
+  white-space: nowrap;
+  align-self: center;
 }
 
 .wildlife-season-item__source {
-  margin: 4px 0 0;
+  margin: 0;
+  padding: 6px 12px 10px;
   font-size: 0.78rem;
   color: var(--muted);
+  border-top: 1px dashed rgba(43, 138, 111, 0.18);
 }
 
 .wildlife-season-item__source a {
   color: var(--sea-600);
+}
+
+@media (max-width: 520px) {
+  .wildlife-season-item__open {
+    grid-template-columns: 72px 1fr;
+    gap: 10px;
+    padding: 9px 10px;
+  }
+  .wildlife-season-item__thumb {
+    width: 72px;
+    height: 72px;
+  }
+  .wildlife-season-item__more {
+    display: none;
+  }
+}
+
+/* ---------- Wildlife modal ---------- */
+.wildlife-modal {
+  border: none;
+  border-radius: 18px;
+  padding: 0;
+  max-width: min(640px, 92vw);
+  width: 100%;
+  background: var(--sand-50);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgba(15, 44, 58, 0.4);
+}
+
+.wildlife-modal::backdrop {
+  background: rgba(15, 44, 58, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.wildlife-modal__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 22px;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.wildlife-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(15, 44, 58, 0.6);
+  color: #fff;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.wildlife-modal__close:hover,
+.wildlife-modal__close:focus-visible {
+  background: rgba(15, 44, 58, 0.85);
+  outline: none;
+}
+
+.wildlife-modal__figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wildlife-modal__image {
+  width: 100%;
+  max-height: 60vh;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--sea-100);
+  display: block;
+}
+
+.wildlife-modal__caption {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.wildlife-modal__caption a {
+  color: var(--sea-600);
+}
+
+.wildlife-modal__no-image {
+  background: var(--sea-100);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.wildlife-modal__no-image span {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.wildlife-modal__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wildlife-modal__kind {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--kelp);
+}
+
+.wildlife-modal__title {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--sea-700);
+  letter-spacing: -0.01em;
+}
+
+.wildlife-modal__blurb {
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.wildlife-modal__where {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.wildlife-modal__extract {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  color: var(--ink);
+  line-height: 1.55;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  border-left: 3px solid var(--kelp);
+}
+
+.wildlife-modal__source {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.wildlife-modal__source a {
+  color: var(--sea-600);
+}
+
+/* ---------- Family commitments card ---------- */
+.commitments-card {
+  background: linear-gradient(180deg, #ffffff 0%, var(--sea-50) 100%);
+}
+
+.commitments-card__add {
+  background: var(--sea-600);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(31, 111, 139, 0.25);
+}
+
+.commitments-card__add:hover,
+.commitments-card__add:focus-visible {
+  background: var(--sea-700);
+  outline: none;
+}
+
+.commitments-card__empty {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+}
+
+.commitments-card__toggle-all {
+  background: none;
+  border: 1px dashed rgba(31, 111, 139, 0.3);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.84rem;
+  color: var(--sea-700);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.commitments-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.commitments-list__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 10px;
+  border-left: 4px solid var(--sea-700);
+}
+
+.commitments-list__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.commitments-list__meta {
+  font-size: 0.84rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.commitments-list__notes {
+  font-size: 0.84rem;
+  color: var(--ink);
+  font-style: italic;
+}
+
+.commitments-list__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.commitments-list__actions button {
+  background: none;
+  border: 1px solid rgba(31, 111, 139, 0.25);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  color: var(--sea-700);
+  cursor: pointer;
+}
+
+.commitments-list__actions button:hover,
+.commitments-list__actions button:focus-visible {
+  background: rgba(31, 111, 139, 0.08);
+  outline: none;
+}
+
+.commitments-list__remove {
+  color: var(--coral) !important;
+  border-color: rgba(255, 126, 107, 0.4) !important;
+}
+
+.commitments-editor {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  border: 1px solid rgba(31, 111, 139, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.commitments-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.86rem;
+  color: var(--sea-700);
+  font-weight: 600;
+}
+
+.commitments-editor__field input,
+.commitments-editor__field select {
+  font: inherit;
+  font-weight: 400;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(31, 111, 139, 0.25);
+  background: #fff;
+}
+
+.commitments-editor__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.commitments-editor__weekdays {
+  border: 1px solid rgba(31, 111, 139, 0.18);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.commitments-editor__weekdays legend {
+  padding: 0 6px;
+  font-size: 0.82rem;
+  color: var(--sea-700);
+  font-weight: 700;
+}
+
+.commitments-editor__weekday {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(31, 111, 139, 0.06);
+  font-size: 0.84rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.commitments-editor__weekday input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.commitments-editor__weekday--active {
+  background: var(--sea-600);
+  color: #fff;
+}
+
+.commitments-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.commitments-editor__actions button {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(31, 111, 139, 0.25);
+  background: #fff;
+  color: var(--sea-700);
+  cursor: pointer;
+}
+
+.commitments-editor__save {
+  background: var(--sea-600) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  font-weight: 700 !important;
+}
+
+.commitments-editor__save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ---------- Schedule card: collapsed summary ---------- */
@@ -2049,6 +2506,9 @@ a {
   .schedule-block--fallback {
     background: rgba(255, 126, 107, 0.08);
   }
+  .schedule-block--custom {
+    background: rgba(143, 208, 226, 0.12);
+  }
   .schedule-block__warn {
     color: #ffd87a;
   }
@@ -2060,6 +2520,58 @@ a {
   .wildlife-season-item {
     background: rgba(255, 255, 255, 0.04);
     border-color: rgba(109, 200, 164, 0.20);
+  }
+  .wildlife-season-item__open:hover,
+  .wildlife-season-item__open:focus-visible {
+    background: rgba(109, 200, 164, 0.12);
+  }
+  .wildlife-season-item__thumb {
+    background: linear-gradient(135deg, #173040 0%, #1f3340 100%);
+    box-shadow: inset 0 0 0 1px rgba(109, 200, 164, 0.20);
+  }
+  .wildlife-season-item__source {
+    border-top-color: rgba(109, 200, 164, 0.20);
+  }
+
+  /* Wildlife modal */
+  .wildlife-modal {
+    background: var(--sand-100);
+    color: var(--ink);
+  }
+  .wildlife-modal::backdrop {
+    background: rgba(0, 0, 0, 0.7);
+  }
+  .wildlife-modal__extract {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .wildlife-modal__no-image {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* Commitments card */
+  .commitments-card {
+    background: linear-gradient(180deg, #122430 0%, #16313e 100%);
+  }
+  .commitments-list__item {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .commitments-editor {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(79, 176, 201, 0.20);
+  }
+  .commitments-editor__field input,
+  .commitments-editor__field select,
+  .commitments-editor__actions button {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ink);
+    border-color: rgba(79, 176, 201, 0.25);
+  }
+  .commitments-editor__weekday {
+    background: rgba(79, 176, 201, 0.08);
+  }
+  .commitments-editor__weekday--active {
+    background: var(--sea-400);
+    color: var(--sea-900);
   }
 
   /* Access summary chips. */

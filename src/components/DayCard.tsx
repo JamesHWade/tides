@@ -21,6 +21,7 @@ import { optimizeDaySchedule } from "../utils/scheduleOptimizer";
 import type { DayWeather } from "../utils/runtimeWeather";
 import type { AccessSettings } from "../hooks/useAccessSettings";
 import type { HouseholdPace } from "../hooks/useHouseholdPace";
+import type { CustomEvent } from "../utils/customEvents";
 
 type Props = {
   day: DayPlan;
@@ -29,6 +30,7 @@ type Props = {
   pace: HouseholdPace;
   weather?: DayWeather;
   access: AccessSettings;
+  customEvents?: CustomEvent[];
   now?: Date;
   isToday?: boolean;
 };
@@ -40,6 +42,7 @@ export function DayCard({
   pace,
   weather,
   access,
+  customEvents,
   now,
   isToday,
 }: Props) {
@@ -72,6 +75,7 @@ export function DayCard({
     weather,
     access,
     pace,
+    customEvents,
     now,
   });
 

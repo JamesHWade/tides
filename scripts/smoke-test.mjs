@@ -824,4 +824,101 @@ assert.ok(
 );
 console.log("✓ good beach windows");
 
+// --- 10. custom commitments anchor the schedule ----------------------------
+const dinnerEvent = {
+  id: "evt-dinner",
+  label: "Family dinner at the club",
+  startHHMM: "18:00",
+  endHHMM: "19:30",
+  recurrence: "specific",
+  dateISO: "2026-05-20",
+};
+const dailyBreakfast = {
+  id: "evt-breakfast",
+  label: "House breakfast",
+  startHHMM: "08:00",
+  endHHMM: "09:00",
+  recurrence: "daily",
+};
+const planWithDinner = optimizeDaySchedule({
+  day: day20,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-20", highF: 82, lowF: 68, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+  customEvents: [dinnerEvent, dailyBreakfast],
+});
+const customBlocks = planWithDinner.blocks.filter((b) => b.kind === "custom");
+assert.equal(
+  customBlocks.length,
+  2,
+  `May 20 schedule should include both a daily and a one-time custom block; got ${customBlocks.length}`,
+);
+const dinnerBlock = customBlocks.find((b) => b.label === "Family dinner at the club");
+assert.ok(dinnerBlock, "dinner appears as a custom block");
+assert.equal(dinnerBlock.start.getUTCHours(), 18, "dinner starts at 18:00");
+assert.equal(dinnerBlock.end.getUTCHours(), 19, "dinner ends at 19:30");
+assert.equal(dinnerBlock.end.getUTCMinutes(), 30, "dinner ends at 19:30");
+
+// No other (non-custom, non-fixed) block should overlap the dinner.
+for (const b of planWithDinner.blocks) {
+  if (b.kind === "custom" || b.kind === "fixed") continue;
+  const overlap = b.start < dinnerBlock.end && dinnerBlock.start < b.end;
+  assert.equal(
+    overlap,
+    false,
+    `block ${b.label} (${b.kind}) must not overlap the dinner commitment`,
+  );
+}
+
+// A non-specific (daily) event should apply to every date in the range.
+const planDay17 = optimizeDaySchedule({
+  day: day17,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-17", highF: 80, lowF: 65, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+  customEvents: [dailyBreakfast],
+});
+assert.ok(
+  planDay17.blocks.some((b) => b.kind === "custom" && b.label === "House breakfast"),
+  "daily commitment applies to every day in the range",
+);
+
+// A weekly event applies only on the matching weekday. May 20 is Wednesday (3).
+const weeklyTeeTime = {
+  id: "evt-tee",
+  label: "Wednesday tee time",
+  startHHMM: "07:00",
+  endHHMM: "10:00",
+  recurrence: "weekly",
+  weekdays: [3],
+};
+const planWedTee = optimizeDaySchedule({
+  day: day20,
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-20", highF: 80, lowF: 65, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+  customEvents: [weeklyTeeTime],
+});
+const planThurTee = optimizeDaySchedule({
+  day: optDays.find((d) => d.date === "2026-05-21"),
+  allDays: optDays,
+  nap,
+  weather: { date: "2026-05-21", highF: 80, lowF: 65, precipChancePct: 10, windMphMax: 8, windFromDir: "SW", shortForecast: "Sunny", emoji: "☀️" },
+  access: DEFAULT_ACCESS,
+  customEvents: [weeklyTeeTime],
+});
+assert.ok(
+  planWedTee.blocks.some((b) => b.kind === "custom" && b.label === "Wednesday tee time"),
+  "weekly Wednesday event appears on May 20 (Wed)",
+);
+assert.equal(
+  planThurTee.blocks.some((b) => b.kind === "custom" && b.label === "Wednesday tee time"),
+  false,
+  "weekly Wednesday event does NOT appear on May 21 (Thu)",
+);
+console.log("✓ custom commitments");
+
 console.log("\nAll smoke tests passed.");

@@ -29,6 +29,14 @@ export type WildlifeNote = {
   /** Source label + URL the family can pull up on a phone. */
   sourceLabel: string;
   sourceUrl: string;
+  /**
+   * Wikipedia article title used to fetch a thumbnail image and an extract
+   * at runtime via the Wikipedia REST summary API. Image attribution is
+   * surfaced in the UI; pages are CC BY-SA, satisfied by linking back to
+   * the article. Underscores are not required — encodeURIComponent handles
+   * spaces.
+   */
+  wikipediaTitle?: string;
 };
 
 export const WILDLIFE: WildlifeNote[] = [
@@ -42,6 +50,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Look for staked-off nests on Kiawah's beachfront; never disturb them or use white lights after dark.",
     sourceLabel: "Town of Kiawah Island — Turtle Patrol",
     sourceUrl: "https://www.kiawahisland.org/turtle-patrol/",
+    wikipediaTitle: "Loggerhead sea turtle",
   },
   {
     id: "loggerhead-hatching",
@@ -53,6 +62,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "If you see a marked nest cordoned off with extra ribbons, it's close to hatching — keep flashlights off and stay well back.",
     sourceLabel: "SC Department of Natural Resources — Sea Turtles",
     sourceUrl: "https://www.dnr.sc.gov/seaturtle/",
+    wikipediaTitle: "Loggerhead sea turtle",
   },
   {
     id: "painted-bunting",
@@ -64,6 +74,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Boardwalks at the Lake House, Kiawah's Marsh View Tower, and trail edges near Mingo Point. Feeders sometimes have them.",
     sourceLabel: "Audubon South Carolina",
     sourceUrl: "https://sc.audubon.org/birds/painted-bunting",
+    wikipediaTitle: "Painted bunting",
   },
   {
     id: "wood-stork",
@@ -75,6 +86,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Freshwater lagoons along Kiawah's golf-course edges and the impoundments along Bohicket Road.",
     sourceLabel: "US Fish & Wildlife — Wood Stork",
     sourceUrl: "https://www.fws.gov/species/wood-stork-mycteria-americana",
+    wikipediaTitle: "Wood stork",
   },
   {
     id: "shorebird-closures",
@@ -86,6 +98,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Captain Sams Spit (west end of Kiawah) and the north end of Seabrook. Stay on the wet sand, leash dogs.",
     sourceLabel: "Audubon South Carolina — Coastal Bird Stewardship",
     sourceUrl: "https://sc.audubon.org/conservation/coastal-bird-stewardship-program",
+    wikipediaTitle: "American oystercatcher",
   },
   {
     id: "alligator-lagoons",
@@ -97,6 +110,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Any of Kiawah's interior lagoons and the Seabrook Lake House lake edge. They cross paths and roads at night.",
     sourceLabel: "SCDNR — Alligators",
     sourceUrl: "https://www.dnr.sc.gov/wildlife/alligator/",
+    wikipediaTitle: "American alligator",
   },
   {
     id: "bottlenose-dolphin",
@@ -108,6 +122,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Captain Sams Inlet, north end of Seabrook, and from the Beachwalker side at low-tide mudbanks.",
     sourceLabel: "Lowcountry Marine Mammal Network",
     sourceUrl: "https://www.lowcountrymarinemammalnetwork.org/",
+    wikipediaTitle: "Common bottlenose dolphin",
   },
   {
     id: "diamondback-terrapin",
@@ -118,6 +133,7 @@ export const WILDLIFE: WildlifeNote[] = [
       "Salt-marsh turtles cross roads in late spring to lay eggs on high ground. Watch (and brake) for them on Kiawah Island Pkwy and Seabrook Island Rd.",
     sourceLabel: "SCDNR — Diamondback Terrapin",
     sourceUrl: "https://www.dnr.sc.gov/wildlife/terrapin.html",
+    wikipediaTitle: "Diamondback terrapin",
   },
   {
     id: "mullet-strand",
@@ -129,6 +145,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Captain Sams Inlet and the Kiawah River side of Beachwalker, within 2 hours of a daylight low tide.",
     sourceLabel: "NOAA Fisheries — Bottlenose Dolphin",
     sourceUrl: "https://www.fisheries.noaa.gov/species/common-bottlenose-dolphin",
+    wikipediaTitle: "Flathead grey mullet",
   },
   {
     id: "right-whale-calving",
@@ -139,6 +156,7 @@ export const WILDLIFE: WildlifeNote[] = [
       "The Georgia/SC bight is the only known calving ground for this critically endangered species. Sightings from shore are rare but possible — call in any to the hotline.",
     sourceLabel: "NOAA Fisheries — Right Whale",
     sourceUrl: "https://www.fisheries.noaa.gov/species/north-atlantic-right-whale",
+    wikipediaTitle: "North Atlantic right whale",
   },
   {
     id: "monarch-migration",
@@ -149,6 +167,7 @@ export const WILDLIFE: WildlifeNote[] = [
       "Monarchs pulse south along the barrier islands in October, drifting through dune sunflower and goldenrod patches.",
     sourceLabel: "Journey North — Monarch Tracker",
     sourceUrl: "https://journeynorth.org/monarchs",
+    wikipediaTitle: "Monarch butterfly",
   },
   {
     id: "marsh-clapper-rail",
@@ -160,6 +179,7 @@ export const WILDLIFE: WildlifeNote[] = [
     where: "Any boardwalk over salt marsh; the Boardwalk #1 access on Seabrook is reliably loud at dawn.",
     sourceLabel: "Cornell Lab — eBird",
     sourceUrl: "https://ebird.org/region/US-SC-019",
+    wikipediaTitle: "Clapper rail",
   },
 ];
 

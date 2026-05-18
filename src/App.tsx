@@ -11,6 +11,7 @@ import { Header } from "./components/Header";
 import { NapSettingsCard } from "./components/NapSettings";
 import { AccessSettingsCard } from "./components/AccessSettings";
 import { BestDaySummary } from "./components/BestDaySummary";
+import { CustomEventsCard } from "./components/CustomEventsCard";
 import { DayCard } from "./components/DayCard";
 import { StrandFeedingPanel } from "./components/StrandFeedingPanel";
 import { WildlifeSeasonCard } from "./components/WildlifeSeasonCard";
@@ -19,6 +20,7 @@ import { TripStatus } from "./components/TripStatus";
 import { DayNav } from "./components/DayNav";
 import { DateRangePicker } from "./components/DateRangePicker";
 import { useAccessSettings } from "./hooks/useAccessSettings";
+import { useCustomEvents } from "./hooks/useCustomEvents";
 import { useDateRange } from "./hooks/useDateRange";
 import { useHouseholdPace } from "./hooks/useHouseholdPace";
 import { useTideDays } from "./hooks/useTideDays";
@@ -93,6 +95,7 @@ export default function App() {
   const weather = useWeather();
   const [access, setAccess] = useAccessSettings();
   const [pace, setPace] = useHouseholdPace();
+  const [customEvents, setCustomEvents] = useCustomEvents();
 
   const bestDays = useMemo(() => {
     if (days.length === 0) return {};
@@ -104,6 +107,7 @@ export default function App() {
         weather: weather.byDate.get(d.date),
         access,
         pace,
+        customEvents,
         now,
       }),
     );
@@ -119,11 +123,12 @@ export default function App() {
         weather: weather.byDate.get(d.date),
         access: publicOnlyAccess,
         pace,
+        customEvents,
         now,
       }),
     );
     return pickBestDays(schedules, publicOnly);
-  }, [days, nap, pace, weather.byDate, access, now]);
+  }, [days, nap, pace, weather.byDate, access, customEvents, now]);
 
   useEffect(() => {
     try {
@@ -186,6 +191,7 @@ export default function App() {
               pace={pace}
               weather={weather.byDate.get(todayDay.date)}
               access={access}
+              customEvents={customEvents}
               now={now}
               isToday
             />
@@ -231,6 +237,13 @@ export default function App() {
           onPaceChange={setPace}
         />
 
+        <CustomEventsCard
+          events={customEvents}
+          onChange={setCustomEvents}
+          startISO={range.startISO}
+          endISO={range.endISO}
+        />
+
         <AccessSettingsCard value={access} onChange={setAccess} />
 
         {otherDays.length > 0 && (
@@ -248,6 +261,7 @@ export default function App() {
                   pace={pace}
                   weather={weather.byDate.get(day.date)}
                   access={access}
+                  customEvents={customEvents}
                   now={now}
                   isToday={false}
                 />
