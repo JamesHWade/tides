@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 import type { WildlifeNote, WildlifeKind } from "../data/wildlife";
 import type { WikiImage } from "../utils/wikipediaImages";
 
@@ -43,7 +43,7 @@ export function WildlifeModal({ note, image, kindEmoji, onClose }: Props) {
   }, [onClose]);
 
   // Click on the backdrop (outside the inner card) closes.
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
+  const handleBackdropClick = (e: MouseEvent<HTMLDialogElement>) => {
     if (e.target === dialogRef.current) onClose();
   };
 

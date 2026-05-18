@@ -25,6 +25,10 @@ function coerce(raw: unknown): CustomEvent[] {
     if (typeof o.label !== "string") continue;
     if (typeof o.startHHMM !== "string" || !HHMM_RE.test(o.startHHMM)) continue;
     if (typeof o.endHHMM !== "string" || !HHMM_RE.test(o.endHHMM)) continue;
+    // Reject inverted/zero intervals here so the optimizer never sees a
+    // protected interval where start >= end (would break trimming /
+    // subdivision math).
+    if (o.startHHMM >= o.endHHMM) continue;
     if (!isRecurrence(o.recurrence)) continue;
     const evt: CustomEvent = {
       id: o.id,

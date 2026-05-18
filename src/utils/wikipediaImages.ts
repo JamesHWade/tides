@@ -29,6 +29,27 @@ const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 type CacheEntry = { ts: number; img: WikiImage | null };
 type Cache = Record<string, CacheEntry>;
 
+function isValidImage(v: unknown): v is WikiImage {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.query === "string" &&
+    typeof o.title === "string" &&
+    typeof o.pageUrl === "string" &&
+    (o.thumbnail === null || typeof o.thumbnail === "string") &&
+    (o.originalImage === null || typeof o.originalImage === "string") &&
+    (o.extract === null || typeof o.extract === "string")
+  );
+}
+
+function isValidEntry(v: unknown): v is CacheEntry {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  if (!Number.isFinite(o.ts)) return false;
+  if (o.img !== null && !isValidImage(o.img)) return false;
+  return true;
+}
+
 function loadCache(): Cache {
   if (typeof localStorage === "undefined") return {};
   try {
@@ -36,7 +57,14 @@ function loadCache(): Cache {
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return {};
-    return parsed as Cache;
+    // Drop any entry whose shape doesn't match — a corrupted or older-schema
+    // value would otherwise satisfy `cacheHit` and return `undefined` to
+    // callers that expect `WikiImage | null`.
+    const out: Cache = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isValidEntry(v)) out[k] = v;
+    }
+    return out;
   } catch {
     return {};
   }
@@ -80,8 +108,14 @@ export async function fetchWikipediaImage(
       headers: { Accept: "application/json" },
     });
     if (!res.ok) {
-      cache[title] = { ts: Date.now(), img: null };
-      saveCache(cache);
+      // Only negative-cache "this page really doesn't exist" — 404/410.
+      // 429s and 5xxs are transient (rate-limit, outage); poisoning the
+      // cache for 30 days on a brief blip would hide thumbnails long
+      // after the upstream recovered.
+      if (res.status === 404 || res.status === 410) {
+        cache[title] = { ts: Date.now(), img: null };
+        saveCache(cache);
+      }
       return null;
     }
     const json = (await res.json()) as {

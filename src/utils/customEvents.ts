@@ -38,14 +38,19 @@ export const WEEKDAY_LONG = [
   "Saturday",
 ];
 
-/** New blank event with a sensible default time. */
+/**
+ * New blank event with a sensible default time. If `dateISO` is provided
+ * we default to a one-day "specific" event anchored on that date; otherwise
+ * we default to "daily" so the blank event is structurally valid (specific
+ * recurrence without a dateISO would fail `isValidEvent`).
+ */
 export function makeEmptyEvent(dateISO?: string): CustomEvent {
   return {
     id: `evt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     label: "",
     startHHMM: "18:00",
     endHHMM: "19:30",
-    recurrence: dateISO ? "specific" : "specific",
+    recurrence: dateISO ? "specific" : "daily",
     dateISO,
   };
 }
