@@ -11,6 +11,7 @@ const KIND_LABEL: Record<ScheduleBlock["kind"], string> = {
   strand: "Strand",
   activity: "Plan",
   fallback: "Public",
+  custom: "Family",
 };
 
 const KIND_CLASS: Record<ScheduleBlock["kind"], string> = {
@@ -19,10 +20,14 @@ const KIND_CLASS: Record<ScheduleBlock["kind"], string> = {
   strand: "schedule-block--strand",
   activity: "schedule-block--activity",
   fallback: "schedule-block--fallback",
+  custom: "schedule-block--custom",
 };
 
 export function FamilyScheduleCard({ schedule }: Props) {
-  const visibleBlocks = useMemo(() => schedule.blocks.slice(0, 5), [schedule.blocks]);
+  // Originally capped at 5 to keep things tidy, but with custom commitments
+  // added we want every fixed-time block visible — a hidden dinner reservation
+  // is exactly the kind of thing the family is here to plan around.
+  const visibleBlocks = schedule.blocks;
 
   const gatedSample = useMemo(() => {
     return schedule.skipped

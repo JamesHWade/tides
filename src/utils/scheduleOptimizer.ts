@@ -33,13 +33,15 @@ import {
   isActivityAllowed,
   isActivityInSeason,
 } from "./activityAccess";
+import { eventAppliesTo, type CustomEvent } from "./customEvents";
 
 export type ScheduleBlockKind =
   | "fixed"
   | "tide"
   | "strand"
   | "activity"
-  | "fallback";
+  | "fallback"
+  | "custom";
 
 export type ScheduleBlock = {
   id: string;
@@ -89,6 +91,13 @@ export type ScheduleInput = {
    */
   pace?: HouseholdPace;
   now?: Date;
+  /**
+   * User-defined commitments — dinners, tee times, doctor visits. Treated
+   * as protected intervals: strand/play windows trim around them and the
+   * activity slots subdivide around them so the schedule never double-books.
+   * Optional so existing callers (smoke tests, older code) keep working.
+   */
+  customEvents?: CustomEvent[];
 };
 
 const PUBLIC_FALLBACK_IDS = [
@@ -337,32 +346,59 @@ function isTravelNote(notes: string[] | undefined): boolean {
 // Strand block helpers
 // ---------------------------------------------------------------------------
 
+type Interval = { start: Date; end: Date };
+
 /**
- * Trim a window against the nap interval. Returns every remaining
- * contiguous piece (≥ 60 min), sorted longest-first. Nap fully inside the
- * window produces two pieces; nap at one end produces one. The caller is
- * responsible for any further clipping (e.g. family hours) before picking.
+ * Trim a window against any number of protected intervals (nap + every
+ * applicable custom event). Returns every remaining contiguous piece
+ * (≥ 60 min), sorted longest-first.
  */
-function trimAgainstNap(
-  win: { start: Date; end: Date },
-  nap: { start: Date; end: Date },
-): Array<{ start: Date; end: Date }> {
-  if (!windowsOverlap(win.start, win.end, nap.start, nap.end)) {
-    return [win];
+function trimAgainstProtected(
+  win: Interval,
+  protectedIntervals: Interval[],
+): Interval[] {
+  let pieces: Interval[] = [{ start: win.start, end: win.end }];
+  for (const guard of protectedIntervals) {
+    const next: Interval[] = [];
+    for (const p of pieces) {
+      if (!windowsOverlap(p.start, p.end, guard.start, guard.end)) {
+        next.push(p);
+        continue;
+      }
+      if (guard.start > p.start) next.push({ start: p.start, end: guard.start });
+      if (guard.end < p.end) next.push({ start: guard.end, end: p.end });
+    }
+    pieces = next;
   }
-  const candidates: Array<{ start: Date; end: Date }> = [];
-  if (nap.start > win.start) {
-    candidates.push({ start: win.start, end: nap.start });
-  }
-  if (nap.end < win.end) {
-    candidates.push({ start: nap.end, end: win.end });
-  }
-  return candidates
+  return pieces
     .filter((c) => c.end.getTime() - c.start.getTime() >= 60 * 60_000)
     .sort(
       (a, b) =>
         b.end.getTime() - b.start.getTime() - (a.end.getTime() - a.start.getTime()),
     );
+}
+
+/** Same shape but with a lower 45-min floor for activity-slot picking. */
+function subdivideSlot(
+  slot: Interval,
+  protectedIntervals: Interval[],
+): Interval[] {
+  let pieces: Interval[] = [{ start: slot.start, end: slot.end }];
+  for (const guard of protectedIntervals) {
+    const next: Interval[] = [];
+    for (const p of pieces) {
+      if (!windowsOverlap(p.start, p.end, guard.start, guard.end)) {
+        next.push(p);
+        continue;
+      }
+      if (guard.start > p.start) next.push({ start: p.start, end: guard.start });
+      if (guard.end < p.end) next.push({ start: guard.end, end: p.end });
+    }
+    pieces = next;
+  }
+  return pieces.filter(
+    (c) => c.end.getTime() - c.start.getTime() >= 45 * 60_000,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +416,22 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
   const familyStart = timeOn(day.date, pace.earliestStart);
   const familyEnd = timeOn(day.date, pace.latestEnd);
 
+  // Resolve which custom events apply to this date and project them onto
+  // station-tz Dates. The order matters only for display; the protection
+  // logic is order-independent.
+  const customEventsToday = (input.customEvents ?? [])
+    .filter((evt) => eventAppliesTo(evt, day.date))
+    .map((evt) => ({
+      evt,
+      start: timeOn(day.date, evt.startHHMM),
+      end: timeOn(day.date, evt.endHHMM),
+    }));
+
+  const protectedIntervals: Interval[] = [
+    { start: naps.start, end: naps.end },
+    ...customEventsToday.map((c) => ({ start: c.start, end: c.end })),
+  ];
+
   const blocks: ScheduleBlock[] = [];
   const skipped: Array<{ activityId: string; reason: string }> = [];
 
@@ -394,6 +446,23 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
       "fixed",
     ),
   );
+
+  // 1b. Custom commitments (dinner at the club, tee time, etc.) — shown as
+  // "custom" blocks so the UI can style them distinctly from nap/anchor.
+  for (const c of customEventsToday) {
+    blocks.push({
+      id: `custom-${c.evt.id}-${day.date}`,
+      label: c.evt.label,
+      start: c.start,
+      end: c.end,
+      kind: "custom",
+      confidence: "high",
+      reason:
+        c.evt.notes && c.evt.notes.trim()
+          ? c.evt.notes
+          : `Family commitment ${formatClock(c.start)}–${formatClock(c.end)}.`,
+    });
+  }
 
   // 2. Travel-day annotation when applicable.
   if (isTravelDay) {
@@ -420,14 +489,14 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     return { start: s, end: e };
   };
 
-  // Pick the best remaining nap-trimmed + family-clipped segment from a raw
-  // window. Considers every piece left after the nap split, not just the
-  // largest — a short pre-nap segment that survives the family clip is
-  // better than a long post-nap segment that doesn't.
+  // Pick the best remaining protected-trimmed + family-clipped segment from a
+  // raw window. Considers every piece left after the nap + custom-event
+  // splits, not just the largest — a short pre-nap segment that survives the
+  // family clip is better than a long post-nap segment that doesn't.
   const pickBestPacedSegment = (
     raw: { start: Date; end: Date },
   ): { start: Date; end: Date } | null => {
-    const segments = trimAgainstNap(raw, naps);
+    const segments = trimAgainstProtected(raw, protectedIntervals);
     let best: { start: Date; end: Date } | null = null;
     let bestLen = 0;
     for (const seg of segments) {
@@ -594,15 +663,28 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
     else gated.push(a);
   }
 
+  // Slots may already be partly occupied by strand / play and crossed by
+  // custom events. Build the list of "obstacles" once per slot and ask
+  // subdivideSlot for every usable sub-window (≥45 min). We then schedule
+  // at most one activity in the largest sub-window per slot — keeps the
+  // schedule readable and avoids back-to-back booking.
   for (const slot of slots) {
-    // Don't double-book a slot that's already covered by strand or play.
-    const occupied = blocks.some(
-      (b) =>
-        b.kind !== "fixed" &&
-        windowsOverlap(b.start, b.end, slot.start, slot.end),
-    );
-    if (occupied) continue;
     if (slot.end.getTime() - slot.start.getTime() < 45 * 60_000) continue;
+    const obstacles: Interval[] = [
+      ...customEventsToday.map((c) => ({ start: c.start, end: c.end })),
+    ];
+    for (const b of blocks) {
+      if (b.kind === "fixed" || b.kind === "custom") continue;
+      if (b.kind === "tide" || b.kind === "strand" || b.kind === "activity") {
+        obstacles.push({ start: b.start, end: b.end });
+      }
+    }
+    const subSlots = subdivideSlot(slot, obstacles).sort(
+      (a, b) =>
+        b.end.getTime() - b.start.getTime() - (a.end.getTime() - a.start.getTime()),
+    );
+    if (subSlots.length === 0) continue;
+    const subSlot = subSlots[0];
 
     // Rank allowed activities for this slot.
     const ranked = allowed
@@ -612,15 +694,16 @@ export function optimizeDaySchedule(input: ScheduleInput): DaySchedule {
 
     let chosenBlock: ScheduleBlock | null = null;
     for (const { a, s } of ranked) {
-      // Start at the later of slot-open and activity-open so a dining option
-      // with `open: 17:00` can still land in a 15:00–19:00 afternoon slot.
+      // Start at the later of sub-slot-open and activity-open so a dining
+      // option with `open: 17:00` can still land in a 15:00–19:00 afternoon
+      // sub-slot.
       const hours = activityHoursOn(a, day.date);
       const desiredStart =
-        hours && hours.open > slot.start ? hours.open : slot.start;
-      if (desiredStart >= slot.end) continue;
+        hours && hours.open > subSlot.start ? hours.open : subSlot.start;
+      if (desiredStart >= subSlot.end) continue;
       const dur = Math.min(
         a.durationMins,
-        slot.end.getTime() - desiredStart.getTime(),
+        subSlot.end.getTime() - desiredStart.getTime(),
       );
       const block = buildActivityBlock(
         a,
