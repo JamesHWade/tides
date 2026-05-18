@@ -10,7 +10,6 @@ const KIND_LABEL: Record<ScheduleBlock["kind"], string> = {
   tide: "Tide",
   strand: "Strand",
   activity: "Plan",
-  meal: "Meal",
   fallback: "Public",
 };
 
@@ -19,7 +18,6 @@ const KIND_CLASS: Record<ScheduleBlock["kind"], string> = {
   tide: "schedule-block--tide",
   strand: "schedule-block--strand",
   activity: "schedule-block--activity",
-  meal: "schedule-block--meal",
   fallback: "schedule-block--fallback",
 };
 
@@ -58,7 +56,11 @@ export function FamilyScheduleCard({ schedule }: Props) {
               {b.warnings && b.warnings.length > 0 && (
                 <ul className="schedule-block__warn">
                   {b.warnings.map((w) => (
-                    <li key={w}>⚠ {w}</li>
+                    <li key={w}>
+                      <span aria-hidden="true">⚠ </span>
+                      <span className="visually-hidden">Warning: </span>
+                      {w}
+                    </li>
                   ))}
                 </ul>
               )}

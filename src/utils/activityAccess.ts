@@ -49,6 +49,12 @@ export function isActivityAllowed(
   if (rule.public === true && !rule.allOf?.length && !rule.anyOf?.length) {
     return true;
   }
+  // A rule with no public flag and no allOf/anyOf is a misconfiguration —
+  // treat it as not allowed rather than silently passing (matches the
+  // "Otherwise the activity is blocked" doc comment above).
+  if (rule.public !== true && !rule.allOf?.length && !rule.anyOf?.length) {
+    return false;
+  }
   return hasAll(rule.allOf, access) && hasAny(rule.anyOf, access);
 }
 

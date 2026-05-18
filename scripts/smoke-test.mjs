@@ -407,6 +407,27 @@ assert.equal(
   false,
   "Beach Club pool not open at 6 AM",
 );
+// Misconfigured rule (no public, no flags) must not silently pass — even
+// if every other field looks reasonable. This is a guardrail for catalog
+// edits.
+const misconfigured = {
+  id: "test-misconfigured",
+  name: "Misconfigured activity",
+  area: "kiawah",
+  kind: "indoor",
+  durationMins: 60,
+  access: {},
+  kidFit: "wholeFamily",
+  weatherFit: {},
+  sourceLabel: "Test",
+  sourceUrl: "",
+  lastVerifiedISO: "2026-05-17",
+};
+assert.equal(
+  isActivityAllowed(misconfigured, DEFAULT_ACCESS),
+  false,
+  "Empty access rule with public !== true must be blocked, not silently allowed",
+);
 console.log("✓ activity access + hours");
 
 // --- 6. schedule optimizer ---------------------------------------------------

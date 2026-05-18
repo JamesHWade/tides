@@ -35,7 +35,6 @@ export type ScheduleBlockKind =
   | "tide"
   | "strand"
   | "activity"
-  | "meal"
   | "fallback";
 
 export type ScheduleBlock = {
